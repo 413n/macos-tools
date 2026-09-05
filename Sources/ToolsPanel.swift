@@ -413,6 +413,17 @@ private struct ScrollDetail: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 8)
+                Toggle(
+                    "Mouse scroll",
+                    isOn: Binding(
+                        get: { model.scrollReverseEnabled },
+                        set: { model.setScrollReverseEnabled($0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
             }
             .stagger(index: 0, generation: presentation.generation)
 
@@ -444,7 +455,9 @@ private struct ScrollDetail: View {
                 }
             }
 
-            if model.scrollReverseEnabled && !model.accessibilityTrusted {
+            if model.scrollReverseEnabled
+                && !model.accessibilityTrusted
+                && model.mice.contains(where: { model.isScrollReverseOn(for: $0.id) }) {
                 Button("Allow Settings") {
                     AccessibilityAuth.requestIfNeeded()
                     model.openAccessibilitySettings()

@@ -94,14 +94,11 @@ final class AppModel: ObservableObject {
         static let didLaunch = "didCompleteFirstLaunch"
     }
 
-    private var defaultReverseForNewMice = true
-
     init() {
         let defaults = UserDefaults.standard
         autoUnlockMinutes = defaults.object(forKey: Keys.autoUnlockMinutes) as? Int ?? 0
         dimKeyboardWhenLocked = defaults.object(forKey: Keys.dimKeyboardWhenLocked) as? Bool ?? true
-        defaultReverseForNewMice = defaults.object(forKey: Keys.scrollReverseEnabled) as? Bool ?? false
-        scrollReverseEnabled = defaultReverseForNewMice
+        scrollReverseEnabled = defaults.object(forKey: Keys.scrollReverseEnabled) as? Bool ?? false
         if let stored = defaults.dictionary(forKey: Keys.scrollReverseByDevice) {
             scrollReverseByDevice = stored.reduce(into: [:]) { result, pair in
                 if let flag = pair.value as? Bool {
@@ -287,12 +284,9 @@ final class AppModel: ObservableObject {
     }
 
     func setScrollReverseEnabled(_ enabled: Bool) {
-        defaultReverseForNewMice = enabled
+        guard enabled != scrollReverseEnabled else { return }
+        scrollReverseEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Keys.scrollReverseEnabled)
-        for mouse in mice {
-            scrollReverseByDevice[mouse.id] = enabled
-        }
-        persistMousePrefs()
         refreshScrollReverseState()
     }
 
@@ -499,7 +493,7 @@ final class AppModel: ObservableObject {
     }
 
     func isScrollReverseOn(for id: String) -> Bool {
-        scrollReverseByDevice[id] ?? defaultReverseForNewMice
+        scrollReverseByDevice[id] ?? true
     }
 
     func setScrollReverse(for id: String, enabled: Bool) {
@@ -518,7 +512,7 @@ final class AppModel: ObservableObject {
     private func seedMouseDefaults() {
         var changed = false
         for mouse in mice where scrollReverseByDevice[mouse.id] == nil {
-            scrollReverseByDevice[mouse.id] = defaultReverseForNewMice
+            scrollReverseByDevice[mouse.id] = true
             changed = true
         }
         if changed {
@@ -532,12 +526,7 @@ final class AppModel: ObservableObject {
 
     private func refreshScrollReverseState() {
         let enabledIDs = Set(mice.filter { isScrollReverseOn(for: $0.id) }.map(\.id))
-        DeviceMonitor.reverseEnabledIDs = enabledIDs
-        scrollReverseEnabled = !enabledIDs.isEmpty
-        if !mice.isEmpty {
-            defaultReverseForNewMice = scrollReverseEnabled
-            UserDefaults.standard.set(scrollReverseEnabled, forKey: Keys.scrollReverseEnabled)
-        }
+        DeviceMonitor.reverseEnabledIDs = scrollReverseEnabled ? enabledIDs : []
         applyScrollReverse()
     }
 
@@ -853,7 +842,8 @@ final class AppModel: ObservableObject {
     }
 
     private func applyScrollReverse() {
-        if scrollReverseEnabled {
+        let shouldRun = scrollReverseEnabled && mice.contains { isScrollReverseOn(for: $0.id) }
+        if shouldRun {
             if ScrollReverseService.shared.start() {
                 accessibilityTrusted = true
             } else {
@@ -871,16 +861,20 @@ final class AppModel: ObservableObject {
             scrollStatus = "No mouse connected"
             return
         }
-        if scrollReverseEnabled {
-            if ScrollReverseService.shared.isActive {
-                scrollStatus = "Trackpad stays natural"
-            } else if !accessibilityTrusted {
-                scrollStatus = "Needs Accessibility permission to reverse the wheel."
-            } else {
-                scrollStatus = "Could not start scroll reverse. Toggle NAF Tools off and on in Accessibility, then reopen the app."
-            }
-        } else {
+        if !scrollReverseEnabled {
             scrollStatus = "Mouse scroll follows System Settings"
+            return
+        }
+        if !mice.contains(where: { isScrollReverseOn(for: $0.id) }) {
+            scrollStatus = "No mouse set to reverse"
+            return
+        }
+        if ScrollReverseService.shared.isActive {
+            scrollStatus = "Trackpad stays natural"
+        } else if !accessibilityTrusted {
+            scrollStatus = "Needs Accessibility permission to reverse the wheel."
+        } else {
+            scrollStatus = "Could not start scroll reverse. Toggle NAF Tools off and on in Accessibility, then reopen the app."
         }
     }
 

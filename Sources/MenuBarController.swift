@@ -76,7 +76,7 @@ final class MenuBarController: NSObject {
             title: "Reverse scroll",
             action: #selector(toggleScrollFromMenu),
             isOn: model.scrollReverseEnabled,
-            isEnabled: !model.mice.isEmpty
+            isEnabled: true
         ))
         menu.addItem(toggleItem(
             title: "Stay awake",
