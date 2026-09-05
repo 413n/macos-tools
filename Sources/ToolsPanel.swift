@@ -87,7 +87,8 @@ private struct HomeGrid: View {
                 outline: "lock",
                 fill: "lock.fill",
                 accent: ModuleColor.keyboard,
-                opticalNudge: CGSize(width: 0.5, height: 0)
+                opticalNudge: CGSize(width: 0.5, height: 0),
+                onToggle: { model.toggleKeyboard() }
             ) {
                 presentation.open(.keyboard)
             }
@@ -99,7 +100,8 @@ private struct HomeGrid: View {
                 isOn: model.scrollReverseEnabled,
                 outline: "computermouse",
                 fill: "computermouse.fill",
-                accent: ModuleColor.scroll
+                accent: ModuleColor.scroll,
+                onToggle: { model.toggleScrollReverse() }
             ) {
                 presentation.open(.scroll)
             }
@@ -112,7 +114,8 @@ private struct HomeGrid: View {
                 isBusy: model.lidBusy,
                 outline: "moon.zzz",
                 fill: "moon.zzz.fill",
-                accent: ModuleColor.lid
+                accent: ModuleColor.lid,
+                onToggle: { model.toggleLidSleep() }
             ) {
                 presentation.open(.lid)
             }
@@ -124,7 +127,8 @@ private struct HomeGrid: View {
                 isOn: model.awakeActive,
                 outline: "cup.and.saucer",
                 fill: "cup.and.saucer.fill",
-                accent: ModuleColor.awake
+                accent: ModuleColor.awake,
+                onToggle: { model.toggleAwake() }
             ) {
                 presentation.open(.awake)
             }
@@ -145,68 +149,105 @@ private struct ToolTile: View {
     let fill: String
     let accent: Color
     var opticalNudge: CGSize = .zero
+    let onToggle: () -> Void
     let action: () -> Void
 
+    @State private var ignoreOpen = false
+    @State private var cardHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 0) {
-                StateSymbol(
-                    outline: outline,
-                    fill: fill,
-                    isActive: isOn,
-                    size: 18,
-                    opticalNudge: opticalNudge
-                )
-                Spacer(minLength: 6)
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                Group {
-                    if isBusy {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(isOn ? .white : .secondary)
-                            .padding(.top, 3)
-                    } else {
-                        Text(status)
-                            .font(.system(size: 11, weight: .regular))
-                            .monospacedDigit()
-                            .opacity(0.8)
-                            .padding(.top, 1)
+        ZStack(alignment: .topLeading) {
+            Button(action: openDetail) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear
+                        .frame(width: Radius.glyph, height: Radius.glyph)
+                    Spacer(minLength: 6)
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                    Group {
+                        if isBusy {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(isOn ? .white : .secondary)
+                                .padding(.top, 3)
+                        } else {
+                            Text(status)
+                                .font(.system(size: 11, weight: .regular))
+                                .monospacedDigit()
+                                .opacity(0.8)
+                                .padding(.top, 1)
+                        }
                     }
                 }
+                .foregroundStyle(isOn ? .white : .primary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .aspectRatio(1, contentMode: .fit)
+                .padding(Radius.tilePadding)
+                .background(
+                    TileBackdrop(isOn: isOn, hovering: cardHovering, accent: accent)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
             }
-            .foregroundStyle(isOn ? .white : .primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .aspectRatio(1, contentMode: .fit)
+            .buttonStyle(PressScaleButtonStyle())
+            .onHover { cardHovering = $0 }
+            .animation(reduceMotion ? nil : Motion.hover, value: cardHovering)
+            .help("Show \(title) options")
+            .accessibilityLabel(title)
+            .accessibilityValue(isBusy ? "Working, \(status)" : status)
+            .accessibilityHint("Shows options")
+
+            Button(action: toggleNow) {
+                GlyphCircle(
+                    outline: outline,
+                    fill: fill,
+                    isOn: isOn,
+                    opticalNudge: opticalNudge
+                )
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .contentShape(Circle())
+            .disabled(isBusy)
+            .opacity(isBusy ? 0.45 : 1)
             .padding(Radius.tilePadding)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
-                    .fill(isOn ? accent : ModuleColor.offFill)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
+            .zIndex(1)
+            .help(isOn ? "Turn \(title) off" : "Turn \(title) on")
+            .accessibilityLabel(title)
+            .accessibilityValue(isBusy ? "Working, \(status)" : status)
+            .accessibilityHint(isOn ? "Turns off" : "Turns on")
         }
-        .buttonStyle(PressScaleButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(isBusy ? "Working, \(status)" : status)
         .animation(Motion.enter, value: isOn)
+    }
+
+    private func toggleNow() {
+        ignoreOpen = true
+        onToggle()
+        DispatchQueue.main.async {
+            ignoreOpen = false
+        }
+    }
+
+    private func openDetail() {
+        guard !ignoreOpen else { return }
+        action()
     }
 }
 
 private struct MacStatsTile: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var presentation: PanelPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
 
     var body: some View {
         Button {
             presentation.open(.machine)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
-                StateSymbol(
+                GlyphCircle(
                     outline: "cpu",
                     fill: "cpu.fill",
-                    isActive: false,
-                    size: 18
+                    isOn: false
                 )
                 Spacer(minLength: 6)
                 Text("This Mac")
@@ -222,12 +263,13 @@ private struct MacStatsTile: View {
             .aspectRatio(1, contentMode: .fit)
             .padding(Radius.tilePadding)
             .background(
-                RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
-                    .fill(ModuleColor.offFill)
+                TileBackdrop(isOn: false, hovering: hovering)
             )
             .contentShape(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
         }
         .buttonStyle(PressScaleButtonStyle())
+        .onHover { hovering = $0 }
+        .animation(reduceMotion ? nil : Motion.hover, value: hovering)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("This Mac")
         .accessibilityValue("CPU \(model.cpuPercentLabel), RAM \(model.ramShortLabel)")

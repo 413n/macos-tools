@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 final class PanelPresentation: ObservableObject {
@@ -49,10 +50,12 @@ enum PanelRoute: Equatable {
 enum Motion {
     static let enter = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.3)
     static let press = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.15)
+    static let hover = press
     static let icon = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.3)
     static let stagger: TimeInterval = 0.1
     static let enterOffset: CGFloat = 8
     static let pressScale: CGFloat = 0.96
+    static let hoverScale: CGFloat = 1.06
     static let iconFromScale: CGFloat = 0.25
     static let iconBlur: CGFloat = 4
 }
@@ -65,6 +68,7 @@ enum Radius {
     static let panelPadding: CGFloat = 14
     static let grid: CGFloat = 10
     static let chrome: CGFloat = 28
+    static let glyph: CGFloat = 30
 }
 
 enum ModuleColor {
@@ -74,6 +78,12 @@ enum ModuleColor {
     static let awake = Color.brown
     static let machine = Color.secondary
     static let offFill = Color.primary.opacity(0.08)
+    static let offFillHover = Color.primary.opacity(0.13)
+    static let glyphOffFill = Color.primary.opacity(0.14)
+    static let glyphOffFillHover = Color.primary.opacity(0.22)
+    static let glyphOnFill = Color.white.opacity(0.22)
+    static let glyphOnFillHover = Color.white.opacity(0.36)
+    static let onHoverWash = Color.white.opacity(0.14)
     static let groupFill = Color.primary.opacity(0.06)
     static let usageWarning = Color.orange
     static let usageCritical = Color.red
@@ -110,9 +120,52 @@ struct PressScaleButtonStyle: ButtonStyle {
     var isStatic = false
 
     func makeBody(configuration: Configuration) -> some View {
+        PressScaleButtonBody(configuration: configuration, isStatic: isStatic)
+    }
+}
+
+private struct PressScaleButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    var isStatic: Bool
+    @State private var cursorPushed = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
         configuration.label
             .scaleEffect(isStatic || !configuration.isPressed ? 1 : Motion.pressScale)
             .animation(isStatic ? nil : Motion.press, value: configuration.isPressed)
+            .onHover { inside in
+                setCursor(inside && isEnabled && !isStatic)
+            }
+            .onChange(of: isEnabled) { _, enabled in
+                if !enabled { setCursor(false) }
+            }
+            .onDisappear { setCursor(false) }
+    }
+
+    private func setCursor(_ on: Bool) {
+        if on, !cursorPushed {
+            NSCursor.pointingHand.push()
+            cursorPushed = true
+        } else if !on, cursorPushed {
+            NSCursor.pop()
+            cursorPushed = false
+        }
+    }
+}
+
+struct TileBackdrop: View {
+    var isOn: Bool
+    var hovering: Bool
+    var accent: Color = .clear
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
+            .fill(isOn ? accent : (hovering ? ModuleColor.offFillHover : ModuleColor.offFill))
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
+                    .fill(isOn && hovering ? ModuleColor.onHoverWash : Color.clear)
+            }
     }
 }
 
@@ -133,6 +186,41 @@ struct ChromeButton: View {
         }
         .buttonStyle(PressScaleButtonStyle())
         .accessibilityLabel(label)
+    }
+}
+
+struct GlyphCircle: View {
+    let outline: String
+    let fill: String
+    let isOn: Bool
+    var opticalNudge: CGSize = .zero
+
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        StateSymbol(
+            outline: outline,
+            fill: fill,
+            isActive: isOn,
+            size: 14,
+            opticalNudge: opticalNudge
+        )
+        .foregroundStyle(isOn ? .white : .primary)
+        .frame(width: Radius.glyph, height: Radius.glyph)
+        .background(glyphFill, in: Circle())
+        .contentShape(Circle())
+        .scaleEffect(reduceMotion || !hovering ? 1 : Motion.hoverScale)
+        .onHover { hovering = $0 }
+        .animation(reduceMotion ? nil : Motion.hover, value: hovering)
+        .accessibilityHidden(true)
+    }
+
+    private var glyphFill: Color {
+        if isOn {
+            return hovering ? ModuleColor.glyphOnFillHover : ModuleColor.glyphOnFill
+        }
+        return hovering ? ModuleColor.glyphOffFillHover : ModuleColor.glyphOffFill
     }
 }
 

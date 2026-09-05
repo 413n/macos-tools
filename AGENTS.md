@@ -10,22 +10,22 @@ Mimic **macOS Control Center**. Stay on SwiftUI + AppKit. Do not add a third-par
 
 - Panel background: `.regularMaterial`. Follow system light/dark. Do not force `colorScheme` or `NSAppearance.darkAqua`.
 - Width ~300pt. Padding 14. 2-column grid, 10pt gutters.
-- Home is a **grid of squares**. Each tile: icon, short name, status. No extra copy.
-- Tap a tile → detail (where the tool is used). Gear (top right) → Settings. Chevron → home. Closing the popover resets to home.
+- Home is a **grid of squares**. Each tile: icon in a circle, short name, status. No extra copy.
+- Tap the icon circle → toggle the tool with current options. Tap the rest of the tile → detail. Gear (top right) → Settings. Chevron → home. Closing the popover resets to home.
 
 ### Modules
 
 - Corner radius 16, inner padding 12 (`Radius.tile` / `tilePadding`).
 - **Off / informational:** `Color.primary.opacity(0.08)` fill, `.primary` content.
-- **On:** fill the whole tile with the module color, white content.
+- **On:** fill the whole tile with the module color, white content. The icon circle is a white 22% disk.
 - Keyboard: `Color.orange`
 - Scroll: `Color.accentColor`
 - Lid Sleep: `Color.purple`
 - Awake: `Color.brown`
 - This Mac: always informational (never an On fill). Show **CPU and RAM** on the tile.
 - Status on toggle tiles is `On` / `Off` (keyboard lock On = locked). Awake shows remaining time when a duration is set.
-- Press: `scale(0.96)`, 150ms, `cubic-bezier(0.2, 0, 0, 1)`.
-- Icons: outline when off, fill when on; cross-fade (scale 0.25→1, opacity, blur 4→0).
+- Hover: brighten the tile fill (`offFillHover`, or a white wash when On). Icon circles brighten and scale to `1.06`. Press: `scale(0.96)`, 150ms, `cubic-bezier(0.2, 0, 0, 1)`.
+- Icons: outline when off, fill when on; cross-fade (scale 0.25→1, opacity, blur 4→0). Sit in a 30pt circle (`Radius.glyph`). Off disk `primary.opacity(0.14)`; on disk white 22% over the module fill.
 
 ### Chrome and details
 
