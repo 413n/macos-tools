@@ -69,7 +69,11 @@ final class DeviceMonitor {
         let context = Unmanaged.passUnretained(self).toOpaque()
         IOHIDManagerRegisterDeviceMatchingCallback(manager, hidDeviceArrived, context)
         IOHIDManagerRegisterDeviceRemovalCallback(manager, hidDeviceRemoved, context)
-        IOHIDManagerRegisterInputValueCallback(manager, hidInputValue, context)
+        // Input callbacks need Input Monitoring. Register them only when
+        // granted so a denied TCC grant cannot empty the device list.
+        if IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted {
+            IOHIDManagerRegisterInputValueCallback(manager, hidInputValue, context)
+        }
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = manager
@@ -77,9 +81,17 @@ final class DeviceMonitor {
         DispatchQueue.main.async { [weak self] in
             self?.publish()
         }
+        refreshHidutil()
+    }
+
+    func refresh() {
+        publish()
+        refreshHidutil()
+    }
+
+    private func refreshHidutil() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let parsed = miceFromHidutil()
-            guard !parsed.mice.isEmpty || !parsed.keyboardIDs.isEmpty else { return }
             DispatchQueue.main.async {
                 self?.hidutilMice = parsed.mice
                 self?.hidutilKeyboardIDs = parsed.keyboardIDs
@@ -151,11 +163,9 @@ final class DeviceMonitor {
                 }
             }
         }
-        if mice.isEmpty {
-            for mouse in hidutilMice where isRealMouse(mouse, keyboardIDs: keyboardIDs) {
-                if !mice.contains(where: { $0.id == mouse.id }) {
-                    mice.append(mouse)
-                }
+        for mouse in hidutilMice where isRealMouse(mouse, keyboardIDs: keyboardIDs) {
+            if !mice.contains(where: { $0.id == mouse.id }) {
+                mice.append(mouse)
             }
         }
         mice.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -201,7 +211,7 @@ private func hidInputValue(
     guard isPointerOrWheelElement(element) else { return }
     let device = IOHIDElementGetDevice(element)
     guard isExternalMouse(device), let mouse = MouseDevice.make(from: device) else { return }
-    guard isRealMouse(mouse, keyboardIDs: DeviceMonitor.keyboardCompositeIDs) else { return }
+    if !isMouse(device), !isRealMouse(mouse, keyboardIDs: DeviceMonitor.keyboardCompositeIDs) { return }
     DeviceMonitor.noteActiveMouse(id: mouse.id)
 }
 
@@ -247,39 +257,70 @@ private func isExternalMouse(_ device: IOHIDDevice) -> Bool {
     return product.localizedCaseInsensitiveContains("Mouse")
 }
 
-private func isMouse(_ device: IOHIDDevice) -> Bool {
-    if IOHIDDeviceConformsTo(device, 1, 2) { return true }
-    let usagePage = intValue(device, kIOHIDPrimaryUsagePageKey) ?? intValue(device, kIOHIDDeviceUsagePageKey)
+private func primaryUsage(_ device: IOHIDDevice) -> (page: Int, usage: Int)? {
+    let page = intValue(device, kIOHIDPrimaryUsagePageKey) ?? intValue(device, kIOHIDDeviceUsagePageKey)
     let usage = intValue(device, kIOHIDPrimaryUsageKey) ?? intValue(device, kIOHIDDeviceUsageKey)
-    return usagePage == 1 && usage == 2
+    guard let page, let usage else { return nil }
+    return (page, usage)
+}
+
+private func isMouse(_ device: IOHIDDevice) -> Bool {
+    // Primary usage is the per-interface truth. ConformsTo can be true for
+    // both mouse and keyboard on a composite HID device, and returns false
+    // for everything when IOHIDManagerOpen is not permitted.
+    if let usage = primaryUsage(device), usage.page == 1, usage.usage == 2 { return true }
+    if let usage = primaryUsage(device), usage.page == 1, usage.usage == 1 { return true }
+    return IOHIDDeviceConformsTo(device, 1, 2)
 }
 
 private func isKeyboard(_ device: IOHIDDevice) -> Bool {
-    IOHIDDeviceConformsTo(device, 1, 6)
+    if let usage = primaryUsage(device) {
+        if usage.page == 1 && usage.usage == 6 { return true }
+        return false
+    }
+    return IOHIDDeviceConformsTo(device, 1, 6)
 }
 
 private func miceFromHidutil() -> (mice: [MouseDevice], keyboardIDs: Set<String>) {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/hidutil")
     process.arguments = ["list"]
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = FileHandle.nullDevice
+    process.standardInput = FileHandle.nullDevice
+    let stdout = Pipe()
+    let stderr = Pipe()
+    process.standardOutput = stdout
+    process.standardError = stderr
     do {
         try process.run()
-        process.waitUntilExit()
     } catch {
         return ([], [])
     }
-    let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    var outData = Data()
+    let group = DispatchGroup()
+    group.enter()
+    DispatchQueue.global(qos: .userInitiated).async {
+        outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        group.leave()
+    }
+    group.enter()
+    DispatchQueue.global(qos: .userInitiated).async {
+        _ = stderr.fileHandleForReading.readDataToEndOfFile()
+        group.leave()
+    }
+    process.waitUntilExit()
+    group.wait()
+    let output = String(data: outData, encoding: .utf8) ?? ""
     return parseHidutilMice(output)
 }
 
 private func parseHidutilMice(_ listing: String) -> (mice: [MouseDevice], keyboardIDs: Set<String>) {
     let lines = listing.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     guard let header = lines.first(where: { $0.contains("VendorID") && $0.contains("Product") && $0.contains("Built-In") }),
-          let productRange = header.range(of: "Product"),
           let userClassRange = header.range(of: "UserClass")
+    else { return ([], []) }
+    let beforeUserClass = header[..<userClassRange.lowerBound]
+    // `Product` must not match `ProductID`. Search backwards from UserClass.
+    guard let productRange = beforeUserClass.range(of: "Product", options: .backwards)
     else { return ([], []) }
 
     let productStart = header.distance(from: header.startIndex, to: productRange.lowerBound)
@@ -303,9 +344,10 @@ private func parseHidutilMice(_ listing: String) -> (mice: [MouseDevice], keyboa
         guard line != header, line.count > productEnd else { continue }
         let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
         guard tokens.count > 4,
-              tokens.last == "0",
+              parseHexOrDec(tokens.last ?? "") == 0,
               parseHexOrDec(tokens[3]) == 1,
-              parseHexOrDec(tokens[4]) == 2,
+              let usage = parseHexOrDec(tokens[4]),
+              usage == 1 || usage == 2,
               let vendor = parseHexOrDec(tokens[0]),
               let productID = parseHexOrDec(tokens[1])
         else { continue }

@@ -476,6 +476,7 @@ final class AppModel: ObservableObject {
     private func handleWake() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self else { return }
+            self.devices.refresh()
             ScrollReverseService.shared.reEnableIfNeeded()
             if self.keyboardLocked {
                 self.reapplyKeyboardLock()
@@ -504,6 +505,7 @@ final class AppModel: ObservableObject {
         statusCheckBusy = true
         statusCheckNotice = nil
         restorePersistedTools()
+        devices.refresh()
         refreshAccessibility()
         refreshScrollReverseState()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
