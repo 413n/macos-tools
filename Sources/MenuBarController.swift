@@ -81,6 +81,12 @@ final class MenuBarController: NSObject {
             isOn: model.lidSleepDisabled,
             isEnabled: !model.lidBusy
         ))
+        menu.addItem(toggleItem(
+            title: "Prevent sleep",
+            action: #selector(toggleAwakeFromMenu),
+            isOn: model.awakeActive,
+            isEnabled: true
+        ))
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q")
 
@@ -121,6 +127,10 @@ final class MenuBarController: NSObject {
 
     @objc private func toggleLidFromMenu() {
         model.toggleLidSleep()
+    }
+
+    @objc private func toggleAwakeFromMenu() {
+        model.toggleAwake()
     }
 
     @objc private func quitFromMenu() {

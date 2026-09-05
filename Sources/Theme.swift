@@ -29,6 +29,7 @@ enum PanelRoute: Equatable {
     case keyboard
     case scroll
     case lid
+    case awake
     case machine
     case settings
 
@@ -38,6 +39,7 @@ enum PanelRoute: Equatable {
         case .keyboard: "Keyboard"
         case .scroll: "Scroll"
         case .lid: "Lid Sleep"
+        case .awake: "Awake"
         case .machine: "This Mac"
         case .settings: "Settings"
         }
@@ -69,6 +71,7 @@ enum ModuleColor {
     static let keyboard = Color.orange
     static let scroll = Color.accentColor
     static let lid = Color.purple
+    static let awake = Color.brown
     static let machine = Color.secondary
     static let offFill = Color.primary.opacity(0.08)
     static let groupFill = Color.primary.opacity(0.06)

@@ -58,6 +58,8 @@ struct ToolsPanel: View {
             ScrollDetail()
         case .lid:
             LidDetail()
+        case .awake:
+            AwakeDetail()
         case .machine:
             MachineDetail()
         case .settings:
@@ -116,8 +118,20 @@ private struct HomeGrid: View {
             }
             .stagger(index: 2, generation: presentation.generation)
 
+            ToolTile(
+                title: "Awake",
+                status: model.awakeTileStatus,
+                isOn: model.awakeActive,
+                outline: "cup.and.saucer",
+                fill: "cup.and.saucer.fill",
+                accent: ModuleColor.awake
+            ) {
+                presentation.open(.awake)
+            }
+            .stagger(index: 3, generation: presentation.generation)
+
             MacStatsTile()
-                .stagger(index: 3, generation: presentation.generation)
+                .stagger(index: 4, generation: presentation.generation)
         }
     }
 }
@@ -446,6 +460,69 @@ private struct LidDetail: View {
             .stagger(index: 0, generation: presentation.generation)
 
             if let error = model.lidError {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct AwakeDetail: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var presentation: PanelPresentation
+
+    var body: some View {
+        GroupedPanel {
+            HStack(alignment: .center, spacing: 10) {
+                StateSymbol(
+                    outline: "cup.and.saucer",
+                    fill: "cup.and.saucer.fill",
+                    isActive: model.awakeActive
+                )
+                .foregroundStyle(model.awakeActive ? ModuleColor.awake : .primary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Prevent sleep")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(model.awakeStatus)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle(
+                    "Prevent sleep",
+                    isOn: Binding(
+                        get: { model.awakeActive },
+                        set: { model.setAwakeActive($0) }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+            .stagger(index: 0, generation: presentation.generation)
+
+            Divider()
+
+            HStack {
+                Text("Activate for")
+                    .font(.system(size: 13))
+                Spacer()
+                Picker("Activate for", selection: $model.awakeMinutes) {
+                    ForEach(model.awakeDurationChoices, id: \.self) { minutes in
+                        Text(AppModel.awakeDurationLabel(minutes)).tag(minutes)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+            }
+            .stagger(index: 1, generation: presentation.generation)
+
+            if let error = model.awakeError {
                 Text(error)
                     .font(.system(size: 11))
                     .foregroundStyle(.red)

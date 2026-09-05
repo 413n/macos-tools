@@ -46,6 +46,24 @@ not prompt. The flag is system-wide for battery power and stays until you turn
 it off; quitting the app does not restore sleep. A closed MacBook with nowhere
 to dump heat can get hot — switch it off when you are done.
 
+### Awake
+
+Prevents idle sleep and display sleep — the same job as KeepingYouAwake, using
+macOS's built-in `caffeinate`:
+
+```sh
+caffeinate -di
+caffeinate -di -t 3600   # one hour
+```
+
+Turn the tile On to hold sleep indefinitely, or pick a duration first (5
+minutes through 5 hours). When a timer is running, the tile shows time left.
+Changing the duration while On restarts the timer. Quitting NAF Tools drops
+the hold; opening it again restores it if time remains.
+
+Lid Sleep is separate: that keeps the Mac awake with the **lid closed** on
+battery. Awake only blocks idle sleep while the lid is open.
+
 ## Persistence
 
 Each tool remembers the last On/Off you chose. Opening the app again restores
@@ -57,6 +75,8 @@ that choice:
 - **Scroll reverse** is an event tap in this process, so it is started again
   from the saved per-mouse switches.
 - **Lid sleep** lives in `pmset`. The tile reads the real setting on launch.
+- **Awake** is a `caffeinate` process owned by this app. It is started again
+  from the saved On/Off and remaining duration.
 
 Settings → **Check status** reads each tool from the Mac and restores anything
 that dropped (sleep can clear a keyboard mapping; Accessibility can disable the
@@ -78,6 +98,7 @@ The first build is ad-hoc signed. If Gatekeeper blocks it, right-click the app
 ## Notes
 
 - Keyboard lock needs no extra permission.
+- Awake needs no extra permission (`caffeinate`).
 - Scroll reverse needs Accessibility because it installs a session event tap.
 - Lid sleep asks for an administrator password once, then toggles without prompting.
 - Open at login can be turned off from the panel.

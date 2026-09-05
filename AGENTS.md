@@ -21,8 +21,9 @@ Mimic **macOS Control Center**. Stay on SwiftUI + AppKit. Do not add a third-par
 - Keyboard: `Color.orange`
 - Scroll: `Color.accentColor`
 - Lid Sleep: `Color.purple`
+- Awake: `Color.brown`
 - This Mac: always informational (never an On fill). Show **CPU and RAM** on the tile.
-- Status on toggle tiles is `On` / `Off` (keyboard lock On = locked).
+- Status on toggle tiles is `On` / `Off` (keyboard lock On = locked). Awake shows remaining time when a duration is set.
 - Press: `scale(0.96)`, 150ms, `cubic-bezier(0.2, 0, 0, 1)`.
 - Icons: outline when off, fill when on; cross-fade (scale 0.25→1, opacity, blur 4→0).
 

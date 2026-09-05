@@ -31,6 +31,19 @@ final class AppModel: ObservableObject {
     @Published var lidError: String?
     @Published var lidBusy = false
 
+    @Published var awakeActive = false
+    @Published var awakeStatus = "Mac can sleep as usual"
+    @Published var awakeError: String?
+    @Published var awakeRemainingSeconds: Int?
+    @Published var awakeMinutes: Int {
+        didSet {
+            UserDefaults.standard.set(awakeMinutes, forKey: Keys.awakeMinutes)
+            if awakeActive {
+                startAwake(timeoutSeconds: Self.timeoutSeconds(for: awakeMinutes))
+            }
+        }
+    }
+
     @Published var loginItemNotice: String?
     @Published var statusCheckNotice: String?
     @Published var statusCheckBusy = false
@@ -47,6 +60,7 @@ final class AppModel: ObservableObject {
     }
 
     let timeoutChoices = [0, 5, 10, 15, 30, 60]
+    let awakeDurationChoices = [0, 5, 10, 15, 30, 60, 120, 300]
 
     private let keyboard = KeyboardLockService()
     private let keyboardQueue = DispatchQueue(label: "naf.tools.keyboard", qos: .userInitiated)
@@ -54,6 +68,8 @@ final class AppModel: ObservableObject {
     private let lid = LidSleepService()
     private let lidQueue = DispatchQueue(label: "naf.tools.lid", qos: .userInitiated)
     private var lidEpoch = 0
+    private let caffeinate = CaffeinateService()
+    private var awakeTick: Timer?
     private let devices = DeviceMonitor()
     private let stats = SystemStatsService()
     private var wakeObserver: NSObjectProtocol?
@@ -67,6 +83,9 @@ final class AppModel: ObservableObject {
         static let scrollReverseEnabled = "scrollReverseEnabled"
         static let scrollReverseByDevice = "scrollReverseByDevice"
         static let lidSleepDisabled = "lidSleepDisabled"
+        static let awakeEnabled = "awakeEnabled"
+        static let awakeMinutes = "awakeMinutes"
+        static let awakeDeadline = "awakeDeadline"
         static let launchAtLogin = "launchAtLogin"
         static let didLaunch = "didCompleteFirstLaunch"
     }
@@ -89,6 +108,9 @@ final class AppModel: ObservableObject {
             }
         }
         lidSleepDisabled = defaults.bool(forKey: Keys.lidSleepDisabled)
+        let storedAwakeMinutes = defaults.object(forKey: Keys.awakeMinutes) as? Int ?? 0
+        awakeMinutes = [0, 5, 10, 15, 30, 60, 120, 300].contains(storedAwakeMinutes) ? storedAwakeMinutes : 0
+        awakeActive = defaults.bool(forKey: Keys.awakeEnabled)
         let savedBoot = defaults.double(forKey: Keys.keyboardLockBoot)
         keyboardLocked = defaults.bool(forKey: Keys.keyboardLocked) && Self.isCurrentBoot(savedBoot)
         if defaults.object(forKey: Keys.launchAtLogin) == nil {
@@ -143,6 +165,9 @@ final class AppModel: ObservableObject {
                 self?.refreshKeyboardStatus()
             }
         }
+        caffeinate.onExpired = { [weak self] in
+            self?.handleAwakeExpired()
+        }
         devices.onChange = { [weak self] snapshot in
             DispatchQueue.main.async {
                 self?.mice = snapshot.mice
@@ -185,6 +210,8 @@ final class AppModel: ObservableObject {
         }
         stats.stop()
         ScrollReverseService.shared.stop()
+        stopAwakeTick()
+        caffeinate.stop()
         // Leave the hidutil mapping and the bash auto-unlock timer running so
         // a quit does not drop keyboard lock for the rest of this boot.
         devices.stop()
@@ -212,6 +239,28 @@ final class AppModel: ObservableObject {
 
     func toggleLidSleep() {
         setLidSleepDisabled(!lidSleepDisabled)
+    }
+
+    func toggleAwake() {
+        setAwakeActive(!awakeActive)
+    }
+
+    var awakeTileStatus: String {
+        if !awakeActive { return "Off" }
+        if let remaining = awakeRemainingSeconds {
+            return Self.formatAwakeRemaining(remaining, compact: true)
+        }
+        return "On"
+    }
+
+    static func awakeDurationLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: return "Indefinitely"
+        case 60: return "1 hour"
+        case 120: return "2 hours"
+        case 300: return "5 hours"
+        default: return "\(minutes) minutes"
+        }
     }
 
     func toggleScrollReverse() {
@@ -497,6 +546,7 @@ final class AppModel: ObservableObject {
     func restorePersistedTools() {
         restoreKeyboardIfNeeded()
         refreshLidStatus()
+        restoreAwakeIfNeeded()
     }
 
     /// Read each tool from the Mac and restore anything that dropped.
@@ -605,6 +655,159 @@ final class AppModel: ObservableObject {
 
     private func persistLidSleepDisabled(_ disabled: Bool) {
         UserDefaults.standard.set(disabled, forKey: Keys.lidSleepDisabled)
+    }
+
+    func setAwakeActive(_ active: Bool) {
+        awakeError = nil
+        if active {
+            if awakeActive, caffeinate.snapshot().active { return }
+            startAwake(timeoutSeconds: Self.timeoutSeconds(for: awakeMinutes))
+        } else {
+            if !awakeActive, !caffeinate.snapshot().active { return }
+            stopAwake(persist: true)
+        }
+    }
+
+    private func startAwake(timeoutSeconds: Int?) {
+        awakeError = nil
+        do {
+            try caffeinate.start(timeoutSeconds: timeoutSeconds)
+        } catch {
+            stopAwakeTick()
+            awakeActive = false
+            awakeRemainingSeconds = nil
+            persistAwakeEnabled(false)
+            awakeError = error.localizedDescription
+            awakeStatus = error.localizedDescription
+            return
+        }
+        awakeActive = true
+        persistAwakeEnabled(true)
+        if let timeoutSeconds, timeoutSeconds > 0 {
+            UserDefaults.standard.set(
+                Date().timeIntervalSince1970 + Double(timeoutSeconds),
+                forKey: Keys.awakeDeadline
+            )
+        } else {
+            UserDefaults.standard.removeObject(forKey: Keys.awakeDeadline)
+        }
+        applyAwakeSnapshot(caffeinate.snapshot())
+        startAwakeTick()
+    }
+
+    private func stopAwake(persist: Bool) {
+        stopAwakeTick()
+        caffeinate.stop()
+        awakeActive = false
+        awakeRemainingSeconds = nil
+        if persist {
+            persistAwakeEnabled(false)
+        }
+        awakeStatus = "Mac can sleep as usual"
+    }
+
+    private func handleAwakeExpired() {
+        stopAwakeTick()
+        awakeActive = false
+        awakeRemainingSeconds = nil
+        persistAwakeEnabled(false)
+        awakeStatus = "Mac can sleep as usual"
+    }
+
+    private func restoreAwakeIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: Keys.awakeEnabled) else {
+            if awakeActive || caffeinate.snapshot().active {
+                stopAwake(persist: false)
+            }
+            return
+        }
+        if caffeinate.snapshot().active {
+            applyAwakeSnapshot(caffeinate.snapshot())
+            startAwakeTick()
+            return
+        }
+        if awakeMinutes == 0 {
+            startAwake(timeoutSeconds: nil)
+            return
+        }
+        let deadline = defaults.double(forKey: Keys.awakeDeadline)
+        let remaining = Int((deadline - Date().timeIntervalSince1970).rounded(.down))
+        if remaining > 1 {
+            startAwake(timeoutSeconds: remaining)
+        } else {
+            stopAwake(persist: true)
+        }
+    }
+
+    private func applyAwakeSnapshot(_ snapshot: CaffeinateService.Snapshot) {
+        awakeActive = snapshot.active
+        awakeRemainingSeconds = snapshot.remainingSeconds
+        if snapshot.active {
+            if let remaining = snapshot.remainingSeconds {
+                awakeStatus = "Staying awake · \(Self.formatAwakeRemaining(remaining, compact: false)) left"
+            } else {
+                awakeStatus = "Staying awake until you turn it off"
+            }
+        } else {
+            awakeStatus = "Mac can sleep as usual"
+        }
+    }
+
+    private func startAwakeTick() {
+        guard awakeTick == nil else { return }
+        let tick = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            self?.refreshAwakeRemaining()
+        }
+        tick.tolerance = 0.25
+        RunLoop.main.add(tick, forMode: .common)
+        awakeTick = tick
+    }
+
+    private func stopAwakeTick() {
+        awakeTick?.invalidate()
+        awakeTick = nil
+    }
+
+    private func refreshAwakeRemaining() {
+        let snapshot = caffeinate.snapshot()
+        if snapshot.active {
+            applyAwakeSnapshot(snapshot)
+        } else if awakeActive {
+            handleAwakeExpired()
+        }
+    }
+
+    private func persistAwakeEnabled(_ enabled: Bool) {
+        let defaults = UserDefaults.standard
+        defaults.set(enabled, forKey: Keys.awakeEnabled)
+        if !enabled {
+            defaults.removeObject(forKey: Keys.awakeDeadline)
+        }
+    }
+
+    private static func timeoutSeconds(for minutes: Int) -> Int? {
+        minutes > 0 ? minutes * 60 : nil
+    }
+
+    private static func formatAwakeRemaining(_ seconds: Int, compact: Bool) -> String {
+        if seconds >= 3600 {
+            let hours = seconds / 3600
+            let minutes = (seconds % 3600) / 60
+            if compact {
+                return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+            }
+            if minutes > 0 {
+                return "\(hours) hr \(minutes) min"
+            }
+            return hours == 1 ? "1 hour" : "\(hours) hours"
+        }
+        if seconds >= 60 {
+            let minutes = seconds / 60
+            if compact { return "\(minutes) min" }
+            return minutes == 1 ? "1 min" : "\(minutes) min"
+        }
+        return compact ? "\(seconds)s" : "\(seconds) sec"
     }
 
     private static func currentBootTime() -> TimeInterval {
