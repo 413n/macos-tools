@@ -59,10 +59,37 @@ final class MenuBarController: NSObject {
 
     private func showContextMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false
+
         menu.addItem(withTitle: "Open NAF Tools", action: #selector(openFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
+        menu.addItem(toggleItem(
+            title: "Keyboard lock",
+            action: #selector(toggleKeyboardFromMenu),
+            isOn: model.keyboardLocked,
+            isEnabled: !model.keyboardBusy
+        ))
+        menu.addItem(toggleItem(
+            title: "Reverse scroll",
+            action: #selector(toggleScrollFromMenu),
+            isOn: model.scrollReverseEnabled,
+            isEnabled: !model.mice.isEmpty
+        ))
+        menu.addItem(toggleItem(
+            title: "Stay awake",
+            action: #selector(toggleLidFromMenu),
+            isOn: model.lidSleepDisabled,
+            isEnabled: !model.lidBusy
+        ))
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q")
-        menu.items.forEach { $0.target = self }
+
+        menu.items.forEach { item in
+            if item.action != nil {
+                item.target = self
+            }
+        }
+
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         DispatchQueue.main.async { [weak self] in
@@ -73,8 +100,27 @@ final class MenuBarController: NSObject {
         }
     }
 
+    private func toggleItem(title: String, action: Selector, isOn: Bool, isEnabled: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.state = isOn ? .on : .off
+        item.isEnabled = isEnabled
+        return item
+    }
+
     @objc private func openFromMenu() {
         showPopover()
+    }
+
+    @objc private func toggleKeyboardFromMenu() {
+        model.toggleKeyboard()
+    }
+
+    @objc private func toggleScrollFromMenu() {
+        model.toggleScrollReverse()
+    }
+
+    @objc private func toggleLidFromMenu() {
+        model.toggleLidSleep()
     }
 
     @objc private func quitFromMenu() {

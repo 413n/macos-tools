@@ -210,6 +210,24 @@ final class AppModel: ObservableObject {
         setKeyboardLocked(!keyboardLocked)
     }
 
+    func toggleLidSleep() {
+        setLidSleepDisabled(!lidSleepDisabled)
+    }
+
+    func toggleScrollReverse() {
+        setScrollReverseEnabled(!scrollReverseEnabled)
+    }
+
+    func setScrollReverseEnabled(_ enabled: Bool) {
+        defaultReverseForNewMice = enabled
+        UserDefaults.standard.set(enabled, forKey: Keys.scrollReverseEnabled)
+        for mouse in mice {
+            scrollReverseByDevice[mouse.id] = enabled
+        }
+        persistMousePrefs()
+        refreshScrollReverseState()
+    }
+
     func unlockKeyboard() {
         setKeyboardLocked(false)
     }
