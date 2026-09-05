@@ -58,6 +58,9 @@ final class AppModel: ObservableObject {
             applyLaunchAtLogin()
         }
     }
+    @Published var menuBarDisplay: MenuBarDisplay {
+        didSet { UserDefaults.standard.set(menuBarDisplay.rawValue, forKey: Keys.menuBarDisplay) }
+    }
 
     let timeoutChoices = [0, 5, 10, 15, 30, 60]
     let awakeDurationChoices = [0, 5, 10, 15, 30, 60, 120, 300]
@@ -87,6 +90,7 @@ final class AppModel: ObservableObject {
         static let awakeMinutes = "awakeMinutes"
         static let awakeDeadline = "awakeDeadline"
         static let launchAtLogin = "launchAtLogin"
+        static let menuBarDisplay = "menuBarDisplay"
         static let didLaunch = "didCompleteFirstLaunch"
     }
 
@@ -119,6 +123,21 @@ final class AppModel: ObservableObject {
         } else {
             launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
         }
+        if let raw = defaults.string(forKey: Keys.menuBarDisplay),
+           let stored = MenuBarDisplay(rawValue: raw) {
+            menuBarDisplay = stored
+        } else {
+            menuBarDisplay = .logoOnly
+        }
+    }
+
+    var activeMenuBarTools: [MenuBarTool] {
+        var tools: [MenuBarTool] = []
+        if keyboardLocked { tools.append(.keyboard) }
+        if scrollReverseEnabled { tools.append(.scroll) }
+        if lidSleepDisabled { tools.append(.lid) }
+        if awakeActive { tools.append(.awake) }
+        return tools
     }
 
     var mouseSummary: String {

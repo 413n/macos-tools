@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class MenuBarController: NSObject {
@@ -8,6 +9,7 @@ final class MenuBarController: NSObject {
     private let presentation = PanelPresentation()
     private var eventMonitor: Any?
     private var displayRefreshWork: DispatchWorkItem?
+    private var iconCancellables = Set<AnyCancellable>()
 
     init(model: AppModel) {
         self.model = model
@@ -27,6 +29,7 @@ final class MenuBarController: NSObject {
 
         configureStatusItem()
         observeDisplayChanges()
+        observeActiveTools()
     }
 
     deinit {
@@ -88,6 +91,8 @@ final class MenuBarController: NSObject {
             isEnabled: true
         ))
         menu.addItem(.separator())
+        menu.addItem(menuBarDisplayItem())
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q")
 
         menu.items.forEach { item in
@@ -137,6 +142,26 @@ final class MenuBarController: NSObject {
         model.quit()
     }
 
+    private func menuBarDisplayItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Menu bar", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for (index, mode) in MenuBarDisplay.allCases.enumerated() {
+            let entry = NSMenuItem(title: mode.title, action: #selector(selectMenuBarDisplay(_:)), keyEquivalent: "")
+            entry.tag = index
+            entry.state = model.menuBarDisplay == mode ? .on : .off
+            entry.target = self
+            submenu.addItem(entry)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func selectMenuBarDisplay(_ sender: NSMenuItem) {
+        let modes = MenuBarDisplay.allCases
+        guard modes.indices.contains(sender.tag) else { return }
+        model.menuBarDisplay = modes[sender.tag]
+    }
+
     private static func makeStatusItem() -> NSStatusItem {
         NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     }
@@ -149,7 +174,6 @@ final class MenuBarController: NSObject {
         }
         applyIcon()
         if let button = statusItem.button {
-            button.toolTip = "NAF Tools"
             button.target = self
             button.action = #selector(togglePopover(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -158,10 +182,29 @@ final class MenuBarController: NSObject {
 
     private func applyIcon() {
         guard let button = statusItem.button else { return }
+        let mode = model.menuBarDisplay
+        let tools = model.activeMenuBarTools
+        statusItem.length = MenuBarIcon.statusItemLength(mode: mode, tools: tools)
         button.image = nil
-        button.image = MenuBarIcon.makeImage()
-        button.imageScaling = .scaleProportionallyDown
+        button.image = MenuBarIcon.makeImage(mode: mode, tools: tools)
+        button.imageScaling = .scaleNone
         button.imagePosition = .imageOnly
+        button.toolTip = MenuBarIcon.tooltip(tools: tools)
+    }
+
+    private func observeActiveTools() {
+        Publishers.CombineLatest4(
+            model.$keyboardLocked,
+            model.$scrollReverseEnabled,
+            model.$lidSleepDisabled,
+            model.$awakeActive
+        )
+        .combineLatest(model.$menuBarDisplay)
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.applyIcon()
+        }
+        .store(in: &iconCancellables)
     }
 
     private func observeDisplayChanges() {

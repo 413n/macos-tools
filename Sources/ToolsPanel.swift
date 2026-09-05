@@ -589,6 +589,28 @@ private struct SettingsDetail: View {
             GroupedPanel {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
+                        Text("Menu bar")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Preview of tools that are on")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Picker("Menu bar", selection: $model.menuBarDisplay) {
+                        ForEach(MenuBarDisplay.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                }
+                .stagger(index: 1, generation: presentation.generation)
+            }
+
+            GroupedPanel {
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
                         Text("Check status")
                             .font(.system(size: 13, weight: .semibold))
                         Text("Read each tool from this Mac")
@@ -607,7 +629,7 @@ private struct SettingsDetail: View {
                     .controlSize(.small)
                     .disabled(model.statusCheckBusy || model.keyboardBusy || model.lidBusy)
                 }
-                .stagger(index: 1, generation: presentation.generation)
+                .stagger(index: 2, generation: presentation.generation)
 
                 if let notice = model.statusCheckNotice {
                     Text(notice)
@@ -624,7 +646,7 @@ private struct SettingsDetail: View {
             .foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
-            .stagger(index: 2, generation: presentation.generation)
+            .stagger(index: 3, generation: presentation.generation)
         }
     }
 }

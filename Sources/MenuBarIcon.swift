@@ -1,20 +1,152 @@
 import AppKit
 import SwiftUI
 
-/// Menu-bar template of the Narciso N mark (`Resources/logo.svg`).
+enum MenuBarDisplay: String, CaseIterable, Identifiable {
+    case logoOnly
+    case activeIcons
+    case logoAndActive
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .logoOnly: "Logo only"
+        case .activeIcons: "Active icons"
+        case .logoAndActive: "Logo and active icons"
+        }
+    }
+}
+
+enum MenuBarTool: String, CaseIterable {
+    case keyboard
+    case scroll
+    case lid
+    case awake
+
+    var title: String {
+        switch self {
+        case .keyboard: "Keyboard"
+        case .scroll: "Scroll"
+        case .lid: "Lid Sleep"
+        case .awake: "Awake"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .keyboard: "lock.fill"
+        case .scroll: "computermouse.fill"
+        case .lid: "moon.zzz.fill"
+        case .awake: "cup.and.saucer.fill"
+        }
+    }
+
+    var opticalNudge: CGSize {
+        switch self {
+        case .keyboard: CGSize(width: 0.5, height: 0)
+        default: .zero
+        }
+    }
+}
+
+/// Menu-bar template of the Narciso N mark, optionally followed by active-tool symbols.
 ///
 /// A PDF representation stays sharp after display scale changes (unplugging a
 /// monitor, moving the menu bar between 1x and 2x screens). Cached bitmaps do not.
 enum MenuBarIcon {
     static let pointSize = NSSize(width: 18, height: 18)
+    /// Two rows of tiny glyphs, filling a column then growing to the right.
+    private static let gridCell: CGFloat = 8
+    private static let gridGap: CGFloat = 2
+    private static let logoToGridGap: CGFloat = 4
+    private static let symbolPointSize: CGFloat = 8
 
-    static func makeImage() -> NSImage {
+    static func makeImage(mode: MenuBarDisplay, tools: [MenuBarTool]) -> NSImage {
+        switch mode {
+        case .logoOnly:
+            return makeLogoImage()
+        case .activeIcons:
+            return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: false, tools: tools)
+        case .logoAndActive:
+            return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: true, tools: tools)
+        }
+    }
+
+    static func statusItemLength(mode: MenuBarDisplay, tools: [MenuBarTool]) -> CGFloat {
+        if mode == .logoOnly || tools.isEmpty {
+            return NSStatusItem.squareLength
+        }
+        return NSStatusItem.variableLength
+    }
+
+    static func tooltip(tools: [MenuBarTool]) -> String {
+        if tools.isEmpty { return "NAF Tools" }
+        return "NAF Tools — \(tools.map(\.title).joined(separator: ", "))"
+    }
+
+    private static func makeLogoImage() -> NSImage {
         let image = NSImage(data: pdfData()) ?? rasterFallback()
         image.size = pointSize
         image.isTemplate = true
         image.cacheMode = .never
         image.accessibilityDescription = "NAF Tools"
         return image
+    }
+
+    private static func gridSize(toolCount: Int) -> NSSize {
+        let columns = (toolCount + 1) / 2
+        let width = CGFloat(columns) * gridCell + CGFloat(max(0, columns - 1)) * gridGap
+        return NSSize(width: width, height: pointSize.height)
+    }
+
+    private static func makeCompositeImage(showLogo: Bool, tools: [MenuBarTool]) -> NSImage {
+        let grid = gridSize(toolCount: tools.count)
+        let size = NSSize(
+            width: showLogo ? pointSize.width + logoToGridGap + grid.width : grid.width,
+            height: pointSize.height
+        )
+        let image = NSImage(size: size, flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.setShouldAntialias(true)
+            ctx.interpolationQuality = .high
+            var originX: CGFloat = 0
+            if showLogo {
+                drawMark(ctx, in: pointSize)
+                originX = pointSize.width + logoToGridGap
+            }
+            for (index, tool) in tools.enumerated() {
+                let col = index / 2
+                let isTop = index % 2 == 0
+                let frame = CGRect(
+                    x: originX + CGFloat(col) * (gridCell + gridGap),
+                    y: isTop ? gridCell + gridGap : 0,
+                    width: gridCell,
+                    height: gridCell
+                )
+                drawSymbol(tool, in: frame)
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.cacheMode = .never
+        image.accessibilityDescription = "NAF Tools"
+        return image
+    }
+
+    private static func drawSymbol(_ tool: MenuBarTool, in rect: CGRect) {
+        let config = NSImage.SymbolConfiguration(pointSize: symbolPointSize, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.black]))
+        guard let symbol = NSImage(systemSymbolName: tool.systemImage, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        else { return }
+        let size = symbol.size
+        let dest = NSRect(
+            x: rect.midX - size.width / 2 + tool.opticalNudge.width * 0.4,
+            y: rect.midY - size.height / 2 + tool.opticalNudge.height * 0.4,
+            width: size.width,
+            height: size.height
+        )
+        symbol.draw(in: dest, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
 
     private static func pdfData() -> Data {

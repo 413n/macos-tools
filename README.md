@@ -92,6 +92,10 @@ open ~/Applications/NAF\ Tools.app
 Look for the N logo in the menu bar. Click it to open the panel. Drag the icon
 leftward in the menu bar if macOS tucks it behind the extra-items chevron.
 
+Right-click the item (or open Settings) to choose what the menu bar shows:
+the logo only, icons for tools that are on, or both. When nothing is on, the
+logo stays so you can still find the app.
+
 The first build is ad-hoc signed. If Gatekeeper blocks it, right-click the app
 → Open.
 
