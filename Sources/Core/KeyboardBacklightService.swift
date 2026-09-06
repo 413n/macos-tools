@@ -26,22 +26,21 @@ final class KeyboardBacklightService {
     private typealias BoolFromFloatAndID = @convention(c) (AnyObject, Selector, Float, UInt64) -> Bool
     private typealias BoolFromBoolAndID = @convention(c) (AnyObject, Selector, Bool, UInt64) -> Bool
 
-    private enum Keys {
-        static let didForce = "keyboardBacklightDidForce"
-        static let brightness = "keyboardBacklightSavedBrightness"
-        static let auto = "keyboardBacklightSavedAuto"
-    }
-
     /// Turns the built-in keyboard backlight off and remembers the previous
     /// brightness / auto-brightness so `restoreIfNeeded` can put them back.
     func forceOff() {
         lock.lock()
         defer { lock.unlock() }
         guard let client = loadClient(), let id = keyboardID(client) else { return }
-        if !UserDefaults.standard.bool(forKey: Keys.didForce) {
-            UserDefaults.standard.set(brightness(client, id: id), forKey: Keys.brightness)
-            UserDefaults.standard.set(isAutoEnabled(client, id: id), forKey: Keys.auto)
-            UserDefaults.standard.set(true, forKey: Keys.didForce)
+        let store = ToolStateStore.shared
+        if !store.current.keyboardBacklightDidForce {
+            let currentBrightness = brightness(client, id: id)
+            let currentAuto = isAutoEnabled(client, id: id)
+            store.update {
+                $0.keyboardBacklightSavedBrightness = currentBrightness
+                $0.keyboardBacklightSavedAuto = currentAuto
+                $0.keyboardBacklightDidForce = true
+            }
         }
         _ = setAuto(client, id: id, enabled: false)
         _ = setBrightness(client, id: id, value: 0)
@@ -50,20 +49,18 @@ final class KeyboardBacklightService {
     func restoreIfNeeded() {
         lock.lock()
         defer { lock.unlock() }
-        guard UserDefaults.standard.bool(forKey: Keys.didForce) else { return }
-        let brightness = (UserDefaults.standard.object(forKey: Keys.brightness) as? NSNumber)?.floatValue ?? 0
-        let auto = UserDefaults.standard.bool(forKey: Keys.auto)
-        clearSavedState()
+        let store = ToolStateStore.shared
+        guard store.current.keyboardBacklightDidForce else { return }
+        let brightness = store.current.keyboardBacklightSavedBrightness
+        let auto = store.current.keyboardBacklightSavedAuto
+        store.update {
+            $0.keyboardBacklightDidForce = false
+            $0.keyboardBacklightSavedBrightness = 0
+            $0.keyboardBacklightSavedAuto = false
+        }
         guard let client = loadClient(), let id = keyboardID(client) else { return }
         _ = setBrightness(client, id: id, value: brightness)
         _ = setAuto(client, id: id, enabled: auto)
-    }
-
-    private func clearSavedState() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Keys.didForce)
-        defaults.removeObject(forKey: Keys.brightness)
-        defaults.removeObject(forKey: Keys.auto)
     }
 
     private func loadClient() -> NSObject? {

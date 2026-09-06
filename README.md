@@ -70,7 +70,7 @@ caffeinate -di
 caffeinate -di -t 3600   # one hour
 ```
 
-Turn the tile On to hold sleep indefinitely, or pick a duration first (5 minutes through 5 hours). When a timer is running, the tile shows time left. Changing the duration while On restarts the timer. Quitting NAF Tools drops the hold; opening it again restores it if time remains.
+Turn the tile On to hold sleep indefinitely, or pick a duration first (5 minutes through 5 hours). When a timer is running, the tile shows time left. Changing the duration while On restarts the timer. The hold is a detached `caffeinate` process, so quitting the menu-bar app does not drop it. Turn the tile (or `naf-tools awake off`) off when you are done.
 
 Lid Sleep is separate: that keeps the Mac awake with the **lid closed** on battery. Awake only blocks idle sleep while the lid is open.
 
@@ -94,14 +94,29 @@ Live CPU and memory, sampled only while the popover is open. The home tile shows
 
 Right-click the menu-bar item for the same toggles without opening the panel.
 
+## Terminal / agents
+
+`./build.sh` also installs a `naf-tools` CLI (symlinked to `~/.local/bin/naf-tools`) that drives the same tools without opening the panel. Add `~/.local/bin` to `PATH` if it is not there already.
+
+```sh
+naf-tools status --json
+naf-tools keyboard on --minutes 15
+naf-tools scroll on
+naf-tools lid off
+naf-tools awake on --minutes 60
+naf-tools mac
+```
+
+Every command accepts `--json`. Exit codes: `0` ok, `1` failed, `2` usage, `3` permission (Accessibility or administrator). `naf-tools --help` is the full contract.
+
 ## Persistence
 
 Each tool remembers the last On/Off you chose. Opening the app again restores that choice:
 
 - **Keyboard lock** is re-applied for the rest of this boot. A reboot always unlocks the keys (so you cannot lock yourself out). Auto-unlock, if set, keeps running after Quit.
-- **Scroll reverse** is an event tap in this process, so it is started again from the saved per-mouse switches.
+- **Scroll reverse** is a helper process (`naf-tools-scroll`) shared by the app and the CLI. It keeps running after Quit until you turn Scroll off.
 - **Lid sleep** lives in `pmset`. The tile reads the real setting on launch.
-- **Awake** is a `caffeinate` process owned by this app. It is started again from the saved On/Off and remaining duration.
+- **Awake** is a detached `caffeinate` process shared by the app and the CLI. It keeps running after Quit until the timer ends or you turn it off.
 
 ## Install
 
@@ -111,6 +126,8 @@ open ~/Applications/NAF\ Tools.app
 ```
 
 Look for the N logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
+
+The CLI is installed at `~/.local/bin/naf-tools`. Add that directory to `PATH` if needed.
 
 The first build is signed with a local identity. If Gatekeeper blocks it, right-click the app → Open.
 

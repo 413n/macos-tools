@@ -1,6 +1,4 @@
 import AppKit
-import ApplicationServices
-import Combine
 import Darwin
 import Foundation
 import ServiceManagement
@@ -11,10 +9,10 @@ final class AppModel: ObservableObject {
     @Published var keyboardStatus = "Checking built-in keyboard…"
     @Published var keyboardError: String?
     @Published var autoUnlockMinutes: Int {
-        didSet { UserDefaults.standard.set(autoUnlockMinutes, forKey: Keys.autoUnlockMinutes) }
+        didSet { ToolStateStore.shared.update { $0.autoUnlockMinutes = autoUnlockMinutes } }
     }
     @Published var dimKeyboardWhenLocked: Bool {
-        didSet { UserDefaults.standard.set(dimKeyboardWhenLocked, forKey: Keys.dimKeyboardWhenLocked) }
+        didSet { ToolStateStore.shared.update { $0.dimKeyboardWhenLocked = dimKeyboardWhenLocked } }
     }
 
     @Published var scrollReverseByDevice: [String: Bool] = [:]
@@ -37,7 +35,8 @@ final class AppModel: ObservableObject {
     @Published var awakeRemainingSeconds: Int?
     @Published var awakeMinutes: Int {
         didSet {
-            UserDefaults.standard.set(awakeMinutes, forKey: Keys.awakeMinutes)
+            ToolStateStore.shared.update { $0.awakeMinutes = awakeMinutes }
+            if suppressAwakeRestart { return }
             if awakeActive {
                 startAwake(timeoutSeconds: Self.timeoutSeconds(for: awakeMinutes))
             }
@@ -85,18 +84,11 @@ final class AppModel: ObservableObject {
     private var updateCheckTask: URLSessionDataTask?
     private var updateCheckEpoch = 0
     private var latestReleaseURL: URL?
+    private var stateObserver: NSObjectProtocol?
+    private var suppressAwakeRestart = false
+    private var applyingExternalState = false
 
     private enum Keys {
-        static let autoUnlockMinutes = "autoUnlockMinutes"
-        static let dimKeyboardWhenLocked = "dimKeyboardWhenLocked"
-        static let keyboardLocked = "keyboardLocked"
-        static let keyboardLockBoot = "keyboardLockBoot"
-        static let scrollReverseEnabled = "scrollReverseEnabled"
-        static let scrollReverseByDevice = "scrollReverseByDevice"
-        static let lidSleepDisabled = "lidSleepDisabled"
-        static let awakeEnabled = "awakeEnabled"
-        static let awakeMinutes = "awakeMinutes"
-        static let awakeDeadline = "awakeDeadline"
         static let launchAtLogin = "launchAtLogin"
         static let menuBarDisplay = "menuBarDisplay"
         static let visibleHomeTools = "visibleHomeTools"
@@ -106,24 +98,16 @@ final class AppModel: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        autoUnlockMinutes = defaults.object(forKey: Keys.autoUnlockMinutes) as? Int ?? 0
-        dimKeyboardWhenLocked = defaults.object(forKey: Keys.dimKeyboardWhenLocked) as? Bool ?? true
-        scrollReverseEnabled = defaults.object(forKey: Keys.scrollReverseEnabled) as? Bool ?? false
-        if let stored = defaults.dictionary(forKey: Keys.scrollReverseByDevice) {
-            scrollReverseByDevice = stored.reduce(into: [:]) { result, pair in
-                if let flag = pair.value as? Bool {
-                    result[pair.key] = flag
-                } else if let number = pair.value as? NSNumber {
-                    result[pair.key] = number.boolValue
-                }
-            }
-        }
-        lidSleepDisabled = defaults.bool(forKey: Keys.lidSleepDisabled)
-        let storedAwakeMinutes = defaults.object(forKey: Keys.awakeMinutes) as? Int ?? 0
+        let state = ToolStateStore.shared.current
+        autoUnlockMinutes = state.autoUnlockMinutes
+        dimKeyboardWhenLocked = state.dimKeyboardWhenLocked
+        scrollReverseEnabled = state.scrollReverseEnabled
+        scrollReverseByDevice = state.scrollReverseByDevice
+        lidSleepDisabled = state.lidSleepDisabled
+        let storedAwakeMinutes = state.awakeMinutes
         awakeMinutes = [0, 5, 10, 15, 30, 60, 120, 300].contains(storedAwakeMinutes) ? storedAwakeMinutes : 0
-        awakeActive = defaults.bool(forKey: Keys.awakeEnabled)
-        let savedBoot = defaults.double(forKey: Keys.keyboardLockBoot)
-        keyboardLocked = defaults.bool(forKey: Keys.keyboardLocked) && Self.isCurrentBoot(savedBoot)
+        awakeActive = state.awakeEnabled
+        keyboardLocked = state.keyboardLocked && Self.isCurrentBoot(state.keyboardLockBoot)
         if defaults.object(forKey: Keys.launchAtLogin) == nil {
             launchAtLogin = true
             defaults.set(true, forKey: Keys.launchAtLogin)
@@ -256,9 +240,6 @@ final class AppModel: ObservableObject {
                 self?.refreshKeyboardStatus()
             }
         }
-        caffeinate.onExpired = { [weak self] in
-            self?.handleAwakeExpired()
-        }
         devices.onChange = { [weak self] snapshot in
             DispatchQueue.main.async {
                 self?.mice = snapshot.mice
@@ -286,6 +267,15 @@ final class AppModel: ObservableObject {
             self?.refreshAccessibility()
         }
 
+        stateObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NAFPaths.stateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if (notification.object as? String) == "\(getpid())" { return }
+            self?.handleExternalStateChange()
+        }
+
         if !UserDefaults.standard.bool(forKey: Keys.didLaunch) {
             UserDefaults.standard.set(true, forKey: Keys.didLaunch)
             applyLaunchAtLogin()
@@ -299,15 +289,16 @@ final class AppModel: ObservableObject {
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
+        if let stateObserver {
+            DistributedNotificationCenter.default().removeObserver(stateObserver)
+        }
         stats.stop()
-        ScrollReverseService.shared.stop()
         updateCheckEpoch += 1
         updateCheckTask?.cancel()
         updateCheckTask = nil
         stopAwakeTick()
-        caffeinate.stop()
-        // Leave the hidutil mapping and the bash auto-unlock timer running so
-        // a quit does not drop keyboard lock for the rest of this boot.
+        // Leave keyboard mapping, lid sleep, caffeinate, and the scroll helper
+        // running so CLI and a quit of the menu-bar app stay independent.
         devices.stop()
     }
 
@@ -364,8 +355,9 @@ final class AppModel: ObservableObject {
     func setScrollReverseEnabled(_ enabled: Bool) {
         guard enabled != scrollReverseEnabled else { return }
         scrollReverseEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: Keys.scrollReverseEnabled)
+        ToolStateStore.shared.update { $0.scrollReverseEnabled = enabled }
         refreshScrollReverseState()
+        ToolStateStore.shared.notifyChange()
     }
 
     func unlockKeyboard() {
@@ -377,6 +369,7 @@ final class AppModel: ObservableObject {
         keyboardError = nil
         keyboardLocked = locked
         persistKeyboardLocked(locked)
+        ToolStateStore.shared.notifyChange()
         keyboardBusy = true
         keyboardStatus = locked ? "Locking built-in keyboard…" : "Unlocking built-in keyboard…"
         keyboardEpoch += 1
@@ -489,6 +482,9 @@ final class AppModel: ObservableObject {
         lidError = nil
         lidSleepDisabled = disabled
         persistLidSleepDisabled(disabled)
+        if !applyingExternalState {
+            ToolStateStore.shared.notifyChange()
+        }
         lidBusy = true
         lidStatus = disabled ? "Keeping the Mac awake…" : "Restoring lid sleep…"
         lidEpoch += 1
@@ -578,6 +574,9 @@ final class AppModel: ObservableObject {
         scrollReverseByDevice[id] = enabled
         persistMousePrefs()
         refreshScrollReverseState()
+        if !applyingExternalState {
+            ToolStateStore.shared.notifyChange()
+        }
     }
 
     func scrollReverseBinding(for id: String) -> Binding<Bool> {
@@ -599,7 +598,7 @@ final class AppModel: ObservableObject {
     }
 
     private func persistMousePrefs() {
-        UserDefaults.standard.set(scrollReverseByDevice, forKey: Keys.scrollReverseByDevice)
+        ToolStateStore.shared.update { $0.scrollReverseByDevice = scrollReverseByDevice }
     }
 
     private func refreshScrollReverseState() {
@@ -612,7 +611,7 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self else { return }
             self.devices.refresh()
-            ScrollReverseService.shared.reEnableIfNeeded()
+            self.refreshScrollReverseState()
             if self.keyboardLocked {
                 self.reapplyKeyboardLock()
             } else {
@@ -633,6 +632,7 @@ final class AppModel: ObservableObject {
         restoreKeyboardIfNeeded()
         refreshLidStatus()
         restoreAwakeIfNeeded()
+        refreshScrollReverseState()
     }
 
     /// Read each tool from the Mac and restore anything that dropped.
@@ -690,9 +690,9 @@ final class AppModel: ObservableObject {
     }
 
     private func restoreKeyboardIfNeeded() {
-        let defaults = UserDefaults.standard
-        let wantedLock = defaults.bool(forKey: Keys.keyboardLocked)
-        let savedBoot = defaults.double(forKey: Keys.keyboardLockBoot)
+        let state = ToolStateStore.shared.current
+        let wantedLock = state.keyboardLocked
+        let savedBoot = state.keyboardLockBoot
         guard wantedLock && Self.isCurrentBoot(savedBoot) else {
             if wantedLock {
                 persistKeyboardLocked(false)
@@ -770,15 +770,16 @@ final class AppModel: ObservableObject {
     }
 
     private func persistKeyboardLocked(_ locked: Bool) {
-        let defaults = UserDefaults.standard
-        defaults.set(locked, forKey: Keys.keyboardLocked)
-        if locked {
-            defaults.set(Self.currentBootTime(), forKey: Keys.keyboardLockBoot)
+        ToolStateStore.shared.update {
+            $0.keyboardLocked = locked
+            if locked {
+                $0.keyboardLockBoot = Self.currentBootTime()
+            }
         }
     }
 
     private func persistLidSleepDisabled(_ disabled: Bool) {
-        UserDefaults.standard.set(disabled, forKey: Keys.lidSleepDisabled)
+        ToolStateStore.shared.update { $0.lidSleepDisabled = disabled }
     }
 
     func setAwakeActive(_ active: Bool) {
@@ -807,16 +808,11 @@ final class AppModel: ObservableObject {
         }
         awakeActive = true
         persistAwakeEnabled(true)
-        if let timeoutSeconds, timeoutSeconds > 0 {
-            UserDefaults.standard.set(
-                Date().timeIntervalSince1970 + Double(timeoutSeconds),
-                forKey: Keys.awakeDeadline
-            )
-        } else {
-            UserDefaults.standard.removeObject(forKey: Keys.awakeDeadline)
-        }
         applyAwakeSnapshot(caffeinate.snapshot())
         startAwakeTick()
+        if !applyingExternalState {
+            ToolStateStore.shared.notifyChange()
+        }
     }
 
     private func stopAwake(persist: Bool) {
@@ -828,6 +824,9 @@ final class AppModel: ObservableObject {
             persistAwakeEnabled(false)
         }
         awakeStatus = "Mac can sleep as usual"
+        if persist, !applyingExternalState {
+            ToolStateStore.shared.notifyChange()
+        }
     }
 
     private func handleAwakeExpired() {
@@ -839,10 +838,16 @@ final class AppModel: ObservableObject {
     }
 
     private func restoreAwakeIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: Keys.awakeEnabled) else {
-            if awakeActive || caffeinate.snapshot().active {
-                stopAwake(persist: false)
+        let state = ToolStateStore.shared.current
+        guard state.awakeEnabled else {
+            if awakeActive && !caffeinate.snapshot().active {
+                stopAwakeTick()
+                awakeActive = false
+                awakeRemainingSeconds = nil
+                awakeStatus = "Mac can sleep as usual"
+            } else if caffeinate.snapshot().active {
+                applyAwakeSnapshot(caffeinate.snapshot())
+                startAwakeTick()
             }
             return
         }
@@ -855,7 +860,7 @@ final class AppModel: ObservableObject {
             startAwake(timeoutSeconds: nil)
             return
         }
-        let deadline = defaults.double(forKey: Keys.awakeDeadline)
+        let deadline = state.awakeDeadline ?? 0
         let remaining = Int((deadline - Date().timeIntervalSince1970).rounded(.down))
         if remaining > 1 {
             startAwake(timeoutSeconds: remaining)
@@ -903,10 +908,11 @@ final class AppModel: ObservableObject {
     }
 
     private func persistAwakeEnabled(_ enabled: Bool) {
-        let defaults = UserDefaults.standard
-        defaults.set(enabled, forKey: Keys.awakeEnabled)
-        if !enabled {
-            defaults.removeObject(forKey: Keys.awakeDeadline)
+        ToolStateStore.shared.update {
+            $0.awakeEnabled = enabled
+            if !enabled {
+                $0.awakeDeadline = nil
+            }
         }
     }
 
@@ -947,7 +953,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAccessibility() {
-        let trusted = AccessibilityAuth.hasPermission || ScrollReverseService.shared.isActive
+        let trusted = AccessibilityAuth.hasPermission || ScrollHelperController.shared.isRunning
         let changed = trusted != accessibilityTrusted
         accessibilityTrusted = trusted
         if changed {
@@ -960,14 +966,14 @@ final class AppModel: ObservableObject {
     private func applyScrollReverse() {
         let shouldRun = scrollReverseEnabled && mice.contains { isScrollReverseOn(for: $0.id) }
         if shouldRun {
-            if ScrollReverseService.shared.start() {
+            if ScrollHelperController.shared.start() {
                 accessibilityTrusted = true
             } else {
                 accessibilityTrusted = AccessibilityAuth.hasPermission
-                ScrollReverseService.shared.stop()
+                ScrollHelperController.shared.stop()
             }
         } else {
-            ScrollReverseService.shared.stop()
+            ScrollHelperController.shared.stop()
         }
         updateScrollStatus()
     }
@@ -985,13 +991,34 @@ final class AppModel: ObservableObject {
             scrollStatus = "No mouse set to reverse"
             return
         }
-        if ScrollReverseService.shared.isActive {
+        if ScrollHelperController.shared.isRunning {
             scrollStatus = "Trackpad stays natural"
         } else if !accessibilityTrusted {
             scrollStatus = "Needs Accessibility permission to reverse the wheel."
         } else {
             scrollStatus = "Could not start scroll reverse. Toggle NAF Tools off and on in Accessibility, then reopen the app."
         }
+    }
+
+    private func handleExternalStateChange() {
+        ToolStateStore.shared.reload()
+        let state = ToolStateStore.shared.current
+        applyingExternalState = true
+        suppressAwakeRestart = true
+        autoUnlockMinutes = state.autoUnlockMinutes
+        dimKeyboardWhenLocked = state.dimKeyboardWhenLocked
+        scrollReverseEnabled = state.scrollReverseEnabled
+        scrollReverseByDevice = state.scrollReverseByDevice
+        awakeMinutes = [0, 5, 10, 15, 30, 60, 120, 300].contains(state.awakeMinutes)
+            ? state.awakeMinutes
+            : awakeMinutes
+        suppressAwakeRestart = false
+        applyingExternalState = false
+        refreshKeyboardStatus(alignBacklight: true)
+        refreshLidStatus()
+        restoreAwakeIfNeeded()
+        refreshScrollReverseState()
+        refreshAccessibility()
     }
 
     private func applyLaunchAtLogin() {
@@ -1006,24 +1033,5 @@ final class AppModel: ObservableObject {
         } catch {
             loginItemNotice = "Could not update login item: \(error.localizedDescription)"
         }
-    }
-}
-
-enum AccessibilityAuth {
-    static var hasPermission: Bool {
-        AXIsProcessTrusted() || CGPreflightPostEventAccess() || CGPreflightListenEventAccess()
-    }
-
-    static func isTrusted(prompt: Bool) -> Bool {
-        if prompt {
-            requestIfNeeded()
-        }
-        return hasPermission
-    }
-
-    static func requestIfNeeded() {
-        if hasPermission { return }
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
     }
 }

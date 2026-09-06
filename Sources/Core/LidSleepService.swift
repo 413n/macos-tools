@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 /// Lid-sleep control on battery, ported from the `lid-sleep-off` / `lid-sleep-on`
@@ -61,9 +62,48 @@ final class LidSleepService {
         if argumentSets.allSatisfy({ sudoPmset($0) == 0 }) {
             return
         }
+        if isatty(STDIN_FILENO) != 0, isatty(STDOUT_FILENO) != 0 {
+            try installGrantViaTTY(argumentSets)
+            return
+        }
         // Menu-bar apps have no TTY. `sudo -n` failing (no grant yet, or sudo
         // insisting on a terminal) means we need the one-time admin sheet.
         try installGrantAndRun(argumentSets)
+    }
+
+    private func installGrantViaTTY(_ argumentSets: [[String]]) throws {
+        let user = NSUserName()
+        guard user.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+            throw LidSleepError(errorDescription: "Could not install administrator grant for this account.")
+        }
+        let restore = Self.defaultRestoreMinutes
+        let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset -b sleep 0, /usr/bin/pmset -b sleep \(restore), /usr/bin/pmset -b disablesleep 0, /usr/bin/pmset -b disablesleep 1"
+        let pmset = argumentSets
+            .map { "/usr/bin/pmset " + $0.joined(separator: " ") }
+            .joined(separator: " && ")
+        let shell =
+            "set -e; tmp=/tmp/naf-tools-lid-sleep.$$; /usr/bin/printf '%s\\n' '\(rule)' > $tmp; "
+            + "/usr/sbin/visudo -cf $tmp; /usr/sbin/chown root:wheel $tmp; /bin/chmod 0440 $tmp; "
+            + "/bin/mv $tmp \(Self.sudoersPath); \(pmset)"
+        let status = runInteractive("/usr/bin/sudo", ["/bin/sh", "-lc", shell])
+        if status != 0 {
+            throw LidSleepError(
+                errorDescription: "Could not change lid-sleep settings (administrator access required)."
+            )
+        }
+    }
+
+    private func runInteractive(_ launchPath: String, _ arguments: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: launchPath)
+        process.arguments = arguments
+        do {
+            try process.run()
+        } catch {
+            return 1
+        }
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 
     private func sudoPmset(_ arguments: [String]) -> Int32 {

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build NAF Tools as a menu-bar .app and install it to ~/Applications.
+# Build NAF Tools as a menu-bar .app (plus naf-tools CLI) and install to ~/Applications.
 # Pass --dist to skip install and write a versioned zip under build/.
 set -euo pipefail
 
@@ -86,18 +86,36 @@ swiftc -O -sdk "$SDK" -framework AppKit \
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-echo "→ compile"
-swiftc -parse-as-library -O -swift-version 5 \
-  -target arm64-apple-macosx14.0 \
-  -sdk "$SDK" \
+CORE_SOURCES=("$ROOT"/Sources/Core/*.swift)
+APP_SOURCES=("$ROOT"/Sources/App/*.swift)
+CLI_SOURCES=("$ROOT"/Sources/CLI/*.swift)
+HELPER_SOURCES=("$ROOT"/Sources/Helpers/*.swift)
+SWIFTC_COMMON=(
+  -parse-as-library -O -swift-version 5
+  -target arm64-apple-macosx14.0
+  -sdk "$SDK"
+  -framework AppKit
+  -framework IOKit
+  -framework CoreGraphics
+  -framework ApplicationServices
+)
+
+echo "→ compile app"
+swiftc "${SWIFTC_COMMON[@]}" \
   -framework SwiftUI \
-  -framework AppKit \
-  -framework IOKit \
-  -framework CoreGraphics \
-  -framework ApplicationServices \
   -framework ServiceManagement \
   -o "$APP/Contents/MacOS/$EXEC" \
-  "$ROOT"/Sources/*.swift
+  "${CORE_SOURCES[@]}" "${APP_SOURCES[@]}"
+
+echo "→ compile naf-tools CLI"
+swiftc "${SWIFTC_COMMON[@]}" \
+  -o "$APP/Contents/MacOS/naf-tools" \
+  "${CORE_SOURCES[@]}" "${CLI_SOURCES[@]}"
+
+echo "→ compile naf-tools-scroll helper"
+swiftc "${SWIFTC_COMMON[@]}" \
+  -o "$APP/Contents/MacOS/naf-tools-scroll" \
+  "${CORE_SOURCES[@]}" "${HELPER_SOURCES[@]}"
 
 echo "→ sign"
 SIGN_ID="$(ensure_codesign_identity)"
@@ -128,7 +146,15 @@ cp -R "$APP" "$DEST"
 xattr -cr "$DEST" 2>/dev/null || true
 touch "$DEST"
 
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sf "$DEST/Contents/MacOS/naf-tools" "$BIN_DIR/naf-tools"
+
 echo
 echo "Installed: $DEST"
+echo "CLI: $BIN_DIR/naf-tools"
 echo "Open it from the menu bar (N logo)."
 echo "Launch with:  open \"$DEST\""
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+  echo "Add the CLI to your PATH:  export PATH=\"$BIN_DIR:\$PATH\""
+fi

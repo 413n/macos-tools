@@ -118,6 +118,12 @@ final class DeviceMonitor {
         onChange?(snapshot)
     }
 
+    static func listMiceOnce() -> [MouseDevice] {
+        miceFromHidutil().mice.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
     static func builtinKeyboardIDs() -> (vendor: Int, product: Int)? {
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let matching: [String: Any] = [

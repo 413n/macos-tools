@@ -37,6 +37,14 @@ final class SystemStatsService {
         havePreviousCPU = false
     }
 
+    /// Two tick reads ~300ms apart so CPU percent is meaningful from the CLI.
+    func sampleOnce(interval: TimeInterval = 0.3) -> SystemSample {
+        havePreviousCPU = false
+        _ = currentSample()
+        Thread.sleep(forTimeInterval: interval)
+        return currentSample()
+    }
+
     private func publish() {
         onUpdate?(currentSample())
     }
