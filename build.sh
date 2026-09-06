@@ -96,6 +96,9 @@ SWIFTC_COMMON=(
   -sdk "$SDK"
   -framework AppKit
   -framework IOKit
+  -framework CoreWLAN
+  -framework Network
+  -framework SystemConfiguration
   -framework CoreGraphics
   -framework ApplicationServices
 )

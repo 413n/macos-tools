@@ -50,10 +50,7 @@ final class AppModel: ObservableObject {
     @Published var updateCheckBusy = false
     @Published var newerVersion: String?
     @Published var keyboardBusy = false
-    @Published var cpuFraction: Double = 0
-    @Published var cpuReady = false
-    @Published var ramUsed: UInt64 = 0
-    @Published var ramTotal: UInt64 = 0
+    @Published var stats = SystemSample()
     @Published var launchAtLogin: Bool {
         didSet {
             UserDefaults.standard.set(launchAtLogin, forKey: Keys.launchAtLogin)
@@ -62,6 +59,12 @@ final class AppModel: ObservableObject {
     }
     @Published var menuBarDisplay: MenuBarDisplay {
         didSet { UserDefaults.standard.set(menuBarDisplay.rawValue, forKey: Keys.menuBarDisplay) }
+    }
+    @Published var menuBarStats: MenuBarStats {
+        didSet {
+            UserDefaults.standard.set(menuBarStats.rawValue, forKey: Keys.menuBarStats)
+            syncStatsSampling()
+        }
     }
     @Published var visibleHomeTools: [HomeTool]
     @Published var hiddenHomeTools: [HomeTool]
@@ -78,7 +81,7 @@ final class AppModel: ObservableObject {
     private let caffeinate = CaffeinateService()
     private var awakeTick: Timer?
     private let devices = DeviceMonitor()
-    private let stats = SystemStatsService()
+    private let statsService = SystemStatsService()
     private var wakeObserver: NSObjectProtocol?
     private var accessibilityTimer: Timer?
     private var updateCheckTask: URLSessionDataTask?
@@ -88,9 +91,12 @@ final class AppModel: ObservableObject {
     private var suppressAwakeRestart = false
     private var applyingExternalState = false
 
+    private var panelWantsStats = false
+
     private enum Keys {
         static let launchAtLogin = "launchAtLogin"
         static let menuBarDisplay = "menuBarDisplay"
+        static let menuBarStats = "menuBarStats"
         static let visibleHomeTools = "visibleHomeTools"
         static let hiddenHomeTools = "hiddenHomeTools"
         static let didLaunch = "didCompleteFirstLaunch"
@@ -119,6 +125,12 @@ final class AppModel: ObservableObject {
             menuBarDisplay = stored
         } else {
             menuBarDisplay = .logoOnly
+        }
+        if let raw = defaults.string(forKey: Keys.menuBarStats),
+           let stored = MenuBarStats(rawValue: raw) {
+            menuBarStats = stored
+        } else {
+            menuBarStats = .off
         }
         let layout = Self.loadHomeLayout(defaults: defaults)
         visibleHomeTools = layout.visible
@@ -199,25 +211,113 @@ final class AppModel: ObservableObject {
     }
 
     var cpuPercentLabel: String {
-        cpuReady ? String(format: "%.0f%%", cpuFraction * 100) : "…"
+        stats.cpuReady ? StatsFormat.percent(stats.cpuFraction) : "…"
     }
 
     var ramShortLabel: String {
-        guard ramTotal > 0 else { return "…" }
-        return "\(Self.gigabytes(ramUsed)) / \(Self.gigabytes(ramTotal))"
+        guard stats.ramTotal > 0 else { return "…" }
+        return "\(StatsFormat.gigabytes(stats.ramUsed)) / \(StatsFormat.gigabytes(stats.ramTotal))"
     }
 
     var ramFraction: Double {
-        guard ramTotal > 0 else { return 0 }
-        return min(max(Double(ramUsed) / Double(ramTotal), 0), 1)
+        guard stats.ramTotal > 0 else { return 0 }
+        return min(max(Double(stats.ramUsed) / Double(stats.ramTotal), 0), 1)
     }
 
     var cpuUsageLevel: UsageLevel {
-        cpuReady ? UsageLevel(fraction: cpuFraction) : .normal
+        stats.cpuReady ? UsageLevel(fraction: stats.cpuFraction) : .normal
     }
 
     var ramUsageLevel: UsageLevel {
-        ramTotal > 0 ? UsageLevel(fraction: ramFraction) : .normal
+        stats.ramTotal > 0 ? UsageLevel(fraction: ramFraction) : .normal
+    }
+
+    var memoryPressureLevel: UsageLevel {
+        switch stats.memoryPressure {
+        case .normal: .normal
+        case .warning: .warning
+        case .urgent, .critical: .critical
+        }
+    }
+
+    var thermalLevel: UsageLevel {
+        switch stats.thermal {
+        case .nominal: .normal
+        case .fair: .warning
+        case .serious, .critical: .critical
+        @unknown default: .normal
+        }
+    }
+
+    var batteryPercentLabel: String {
+        guard let battery = stats.battery else { return "—" }
+        return StatsFormat.percent(battery.percent)
+    }
+
+    var batteryStatusLabel: String {
+        guard let battery = stats.battery else { return "No battery" }
+        if battery.isFull { return "Full" }
+        if battery.isCharging {
+            if let minutes = battery.minutesToFull {
+                return "\(StatsFormat.durationMinutes(minutes)) to full"
+            }
+            return "Charging"
+        }
+        if let minutes = battery.minutesToEmpty {
+            return "\(StatsFormat.durationMinutes(minutes)) left"
+        }
+        return battery.isPluggedIn ? "Plugged in" : "On battery"
+    }
+
+    var batteryUsageLevel: UsageLevel {
+        guard let battery = stats.battery, !battery.isCharging, !battery.isFull else { return .normal }
+        return .remaining(battery.percent)
+    }
+
+    var networkPrimaryLabel: String {
+        if !stats.network.connected { return "Offline" }
+        if stats.network.ratesReady {
+            return "\(StatsFormat.rate(stats.network.bytesInPerSecond, compact: true))↓ \(StatsFormat.rate(stats.network.bytesOutPerSecond, compact: true))↑"
+        }
+        return stats.network.ssid ?? stats.network.kind
+    }
+
+    var networkSecondaryLabel: String {
+        if !stats.network.connected { return "No connection" }
+        if stats.network.ratesReady {
+            return stats.network.ssid ?? stats.network.ipAddress ?? stats.network.kind
+        }
+        return stats.network.ipAddress ?? stats.network.kind
+    }
+
+    var diskFreeLabel: String {
+        guard let volume = stats.bootVolume else { return "…" }
+        return StatsFormat.gigabytes(volume.free)
+    }
+
+    var diskUsedLabel: String {
+        guard let volume = stats.bootVolume else { return "…" }
+        return StatsFormat.percent(volume.usedFraction)
+    }
+
+    var diskUsageLevel: UsageLevel {
+        guard let volume = stats.bootVolume else { return .normal }
+        return UsageLevel(fraction: volume.usedFraction)
+    }
+
+    var menuBarStatsText: String? {
+        switch menuBarStats {
+        case .off:
+            return nil
+        case .cpu:
+            return stats.cpuReady ? StatsFormat.percent(stats.cpuFraction) : "…"
+        case .battery:
+            return stats.battery.map { StatsFormat.percent($0.percent) } ?? "—"
+        case .network:
+            if !stats.network.connected { return "Offline" }
+            guard stats.network.ratesReady else { return "…" }
+            return "\(StatsFormat.rate(stats.network.bytesInPerSecond, compact: true))↓ \(StatsFormat.rate(stats.network.bytesOutPerSecond, compact: true))↑"
+        }
     }
 
     var appVersion: String {
@@ -225,11 +325,7 @@ final class AppModel: ObservableObject {
     }
 
     static func gigabytes(_ bytes: UInt64) -> String {
-        let gb = Double(bytes) / 1_073_741_824
-        if gb >= 10 {
-            return String(format: "%.0f GB", gb)
-        }
-        return String(format: "%.1f GB", gb)
+        StatsFormat.gigabytes(bytes)
     }
 
     func start() {
@@ -282,6 +378,7 @@ final class AppModel: ObservableObject {
         } else if launchAtLogin {
             applyLaunchAtLogin()
         }
+        syncStatsSampling()
     }
 
     func stop() {
@@ -292,7 +389,7 @@ final class AppModel: ObservableObject {
         if let stateObserver {
             DistributedNotificationCenter.default().removeObserver(stateObserver)
         }
-        stats.stop()
+        statsService.stop()
         updateCheckEpoch += 1
         updateCheckTask?.cancel()
         updateCheckTask = nil
@@ -303,19 +400,30 @@ final class AppModel: ObservableObject {
     }
 
     func startStats() {
-        stats.onUpdate = { [weak self] sample in
-            DispatchQueue.main.async {
-                self?.cpuFraction = sample.cpuFraction
-                self?.cpuReady = sample.cpuReady
-                self?.ramUsed = sample.ramUsed
-                self?.ramTotal = sample.ramTotal
-            }
-        }
-        stats.start()
+        panelWantsStats = true
+        syncStatsSampling()
     }
 
     func stopStats() {
-        stats.stop()
+        panelWantsStats = false
+        syncStatsSampling()
+    }
+
+    private func syncStatsSampling() {
+        let menuWantsStats = menuBarStats != .off
+        guard panelWantsStats || menuWantsStats else {
+            statsService.stop()
+            return
+        }
+        statsService.onUpdate = { [weak self] sample in
+            DispatchQueue.main.async {
+                self?.stats = sample
+            }
+        }
+        statsService.start(
+            interval: panelWantsStats ? 1.0 : 2.0,
+            detail: panelWantsStats
+        )
     }
 
     func toggleKeyboard() {

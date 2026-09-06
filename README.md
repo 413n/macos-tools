@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>A Control Center–style menu-bar widget for a few Mac utilities you actually reach for.</strong><br>
+  <strong>A Control Center–style menu-bar widget for a few Mac utilities you actually reach for, plus a glance at this Mac.</strong><br>
   It lives next to the clock, follows light and dark, and never takes a Dock icon.
 </p>
 
@@ -20,7 +20,7 @@ Click the **N** in the menu bar to open a 2-column grid of tiles. Each tile is o
 - Tap the **rest of the tile** for the detail screen.
 - The **gear** opens Settings. Closing the popover always returns you home.
 
-Active tiles fill with their color (orange keyboard, brown awake, and so on). Off tiles stay quiet. **This Mac** is informational only and shows live CPU and RAM while the panel is open.
+Active tiles fill with their color (orange keyboard, brown awake, and so on). Off tiles stay quiet. **This Mac**, **Battery**, **Network**, and **Storage** are informational only. This Mac shows live CPU and RAM; the others show charge, throughput, and free space while the panel is open.
 
 ## Keyboard lock
 
@@ -80,7 +80,31 @@ Lid Sleep is separate: that keeps the Mac awake with the **lid closed** on batte
   <img src="docs/screenshots/this-mac.png" width="320" alt="This Mac CPU and memory meters">
 </p>
 
-Live CPU and memory, sampled only while the popover is open. The home tile shows the same numbers in compact form.
+Live CPU and memory, plus pressure, swap, thermal state, uptime, a short CPU sparkline, and the top three processes. Sampled while the popover is open (and in the menu bar if you turn on a glance). The home tile shows CPU and RAM.
+
+## Battery
+
+<p align="center">
+  <img src="docs/screenshots/battery.png" width="320" alt="Battery charge, health, and accessories">
+</p>
+
+Charge, time remaining, health, and cycle count on MacBooks. Bluetooth accessories (mouse, trackpad, AirPods) show when macOS reports a percentage. On a desktop the tile reads “Desktop”.
+
+## Network
+
+<p align="center">
+  <img src="docs/screenshots/network.png" width="320" alt="Network link, IP, and throughput">
+</p>
+
+Link type, Wi‑Fi name when macOS allows it, local IP, and live down/up rates.
+
+## Storage
+
+<p align="center">
+  <img src="docs/screenshots/storage.png" width="320" alt="Boot disk used and free space">
+</p>
+
+Used and free space on the boot volume, plus other mounted disks.
 
 ## Settings
 
@@ -90,6 +114,7 @@ Live CPU and memory, sampled only while the popover is open. The home tile shows
 
 - **Open at login** — keep NAF Tools in the menu bar (on by default).
 - **Menu bar** — logo only, icons for tools that are on, or both. When nothing is on, the logo stays so you can still find the app.
+- **Menu bar stats** — optional CPU, battery, or network glance next to the logo. Off by default; sampling then only runs while the panel is open.
 - **Check status** — read each tool from this Mac and restore anything that dropped (sleep can clear a keyboard mapping; Accessibility can disable the scroll tap).
 
 Right-click the menu-bar item for the same toggles without opening the panel.

@@ -82,6 +82,12 @@ struct ToolsPanel: View {
             AwakeDetail()
         case .machine:
             MachineDetail()
+        case .battery:
+            BatteryDetail()
+        case .network:
+            NetworkDetail()
+        case .storage:
+            StorageDetail()
         case .settings:
             SettingsDetail()
         }
@@ -264,8 +270,64 @@ private struct HomeGrid: View {
                 action: { presentation.open(.awake) }
             )
         case .machine:
-            MacStatsTile()
+            InfoStatsTile(
+                title: tool.title,
+                outline: tool.outline,
+                fill: tool.fill,
+                route: .machine,
+                lines: [
+                    InfoMetric(label: "CPU", value: model.cpuPercentLabel, level: model.cpuUsageLevel),
+                    InfoMetric(label: "RAM", value: model.ramShortLabel, level: model.ramUsageLevel)
+                ],
+                accessibilityValue: "CPU \(model.cpuPercentLabel), RAM \(model.ramShortLabel)"
+            )
+        case .battery:
+            InfoStatsTile(
+                title: tool.title,
+                outline: tool.outline,
+                fill: tool.fill,
+                route: .battery,
+                lines: [
+                    InfoMetric(label: "Charge", value: model.batteryPercentLabel, level: model.batteryUsageLevel),
+                    InfoMetric(label: "Status", value: model.stats.battery == nil ? "Desktop" : compactBatteryStatus, level: .normal)
+                ],
+                accessibilityValue: "\(model.batteryPercentLabel), \(model.batteryStatusLabel)"
+            )
+        case .network:
+            InfoStatsTile(
+                title: tool.title,
+                outline: tool.outline,
+                fill: tool.fill,
+                route: .network,
+                lines: [
+                    InfoMetric(label: "Rate", value: model.networkPrimaryLabel, level: .normal),
+                    InfoMetric(label: "Link", value: model.networkSecondaryLabel, level: .normal)
+                ],
+                accessibilityValue: "\(model.networkPrimaryLabel), \(model.networkSecondaryLabel)"
+            )
+        case .storage:
+            InfoStatsTile(
+                title: tool.title,
+                outline: tool.outline,
+                fill: tool.fill,
+                route: .storage,
+                lines: [
+                    InfoMetric(label: "Free", value: model.diskFreeLabel, level: model.diskUsageLevel),
+                    InfoMetric(label: "Used", value: model.diskUsedLabel, level: model.diskUsageLevel)
+                ],
+                accessibilityValue: "\(model.diskFreeLabel) free, \(model.diskUsedLabel) used"
+            )
         }
+    }
+
+    private var compactBatteryStatus: String {
+        guard let battery = model.stats.battery else { return "Desktop" }
+        if battery.isFull { return "Full" }
+        if battery.isCharging { return "Charging" }
+        if let minutes = battery.minutesToEmpty {
+            return StatsFormat.durationMinutes(minutes)
+        }
+        return battery.isPluggedIn ? "Plugged in" : "On battery"
     }
 
     private func cellDrag(for tool: HomeTool) -> some Gesture {
@@ -533,28 +595,41 @@ private struct ToolTile: View {
     }
 }
 
-private struct MacStatsTile: View {
-    @EnvironmentObject private var model: AppModel
+private struct InfoMetric {
+    var label: String
+    var value: String
+    var level: UsageLevel
+}
+
+private struct InfoStatsTile: View {
     @EnvironmentObject private var presentation: PanelPresentation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
+    let title: String
+    let outline: String
+    let fill: String
+    let route: PanelRoute
+    let lines: [InfoMetric]
+    let accessibilityValue: String
+
     var body: some View {
         Button {
-            presentation.open(.machine)
+            presentation.open(route)
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 GlyphCircle(
-                    outline: "cpu",
-                    fill: "cpu.fill",
+                    outline: outline,
+                    fill: fill,
                     isOn: false
                 )
                 Spacer(minLength: 6)
-                Text("This Mac")
+                Text(title)
                     .font(.system(size: 12, weight: .semibold))
                 VStack(alignment: .leading, spacing: 1) {
-                    metric(label: "CPU", value: model.cpuPercentLabel, level: model.cpuUsageLevel)
-                    metric(label: "RAM", value: model.ramShortLabel, level: model.ramUsageLevel)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        metric(label: line.label, value: line.value, level: line.level)
+                    }
                 }
                 .padding(.top, 3)
             }
@@ -571,8 +646,8 @@ private struct MacStatsTile: View {
         .onHover { hovering = $0 }
         .animation(reduceMotion ? nil : Motion.hover, value: hovering)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("This Mac")
-        .accessibilityValue("CPU \(model.cpuPercentLabel), RAM \(model.ramShortLabel)")
+        .accessibilityLabel(title)
+        .accessibilityValue(accessibilityValue)
     }
 
     private func metric(label: String, value: String, level: UsageLevel) -> some View {
@@ -584,7 +659,7 @@ private struct MacStatsTile: View {
                 .font(.system(size: 11, weight: .regular).monospacedDigit())
                 .foregroundStyle(level.tint ?? Color.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
                 .animation(Motion.press, value: level)
         }
     }
@@ -892,20 +967,178 @@ private struct MachineDetail: View {
     @EnvironmentObject private var presentation: PanelPresentation
 
     var body: some View {
-        GroupedPanel {
-            MeterRow(
-                label: "CPU",
-                value: model.cpuPercentLabel,
-                fraction: model.cpuReady ? model.cpuFraction : 0
-            )
-            .stagger(index: 0, generation: presentation.generation)
+        VStack(alignment: .leading, spacing: 10) {
+            GroupedPanel {
+                MeterRow(
+                    label: "CPU",
+                    value: model.cpuPercentLabel,
+                    fraction: model.stats.cpuReady ? model.stats.cpuFraction : 0,
+                    level: model.cpuUsageLevel
+                )
+                .stagger(index: 0, generation: presentation.generation)
 
-            MeterRow(
-                label: "Memory",
-                value: model.ramShortLabel,
-                fraction: model.ramFraction
+                if model.stats.cpuHistory.count > 1 {
+                    Sparkline(values: model.stats.cpuHistory)
+                        .stagger(index: 1, generation: presentation.generation)
+                }
+
+                MeterRow(
+                    label: "Memory",
+                    value: model.ramShortLabel,
+                    fraction: model.ramFraction,
+                    level: model.ramUsageLevel
+                )
+                .stagger(index: 2, generation: presentation.generation)
+
+                StatRow(label: "Pressure", value: model.stats.memoryPressure.label, level: model.memoryPressureLevel)
+                    .stagger(index: 3, generation: presentation.generation)
+
+                if model.stats.swapTotal > 0 {
+                    StatRow(
+                        label: "Swap",
+                        value: "\(StatsFormat.gigabytes(model.stats.swapUsed)) / \(StatsFormat.gigabytes(model.stats.swapTotal))"
+                    )
+                    .stagger(index: 4, generation: presentation.generation)
+                }
+
+                StatRow(label: "Thermal", value: StatsFormat.thermal(model.stats.thermal), level: model.thermalLevel)
+                    .stagger(index: 5, generation: presentation.generation)
+
+                StatRow(label: "Up", value: StatsFormat.uptime(model.stats.uptimeSeconds))
+                    .stagger(index: 6, generation: presentation.generation)
+            }
+
+            if !model.stats.topProcesses.isEmpty {
+                GroupedPanel {
+                    Text("Top processes")
+                        .font(.system(size: 12, weight: .semibold))
+                        .stagger(index: 7, generation: presentation.generation)
+                    ForEach(Array(model.stats.topProcesses.enumerated()), id: \.element.id) { index, process in
+                        ProcessRow(process: process)
+                            .stagger(index: 8 + index, generation: presentation.generation)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct BatteryDetail: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var presentation: PanelPresentation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            GroupedPanel {
+                if let battery = model.stats.battery {
+                    MeterRow(
+                        label: "Charge",
+                        value: model.batteryPercentLabel,
+                        fraction: battery.percent,
+                        level: model.batteryUsageLevel
+                    )
+                    .stagger(index: 0, generation: presentation.generation)
+
+                    StatRow(label: "Status", value: model.batteryStatusLabel)
+                        .stagger(index: 1, generation: presentation.generation)
+
+                    if let health = battery.health, !health.isEmpty {
+                        StatRow(label: "Health", value: health)
+                            .stagger(index: 2, generation: presentation.generation)
+                    }
+                    if let cycles = battery.cycleCount {
+                        StatRow(label: "Cycles", value: "\(cycles)")
+                            .stagger(index: 3, generation: presentation.generation)
+                    }
+                } else {
+                    Text("This Mac has no battery")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .stagger(index: 0, generation: presentation.generation)
+                }
+            }
+
+            if !model.stats.accessories.isEmpty {
+                GroupedPanel {
+                    Text("Accessories")
+                        .font(.system(size: 12, weight: .semibold))
+                        .stagger(index: 4, generation: presentation.generation)
+                    ForEach(Array(model.stats.accessories.enumerated()), id: \.element.id) { index, accessory in
+                        StatRow(
+                            label: accessory.name,
+                            value: "\(accessory.percent)%",
+                            level: .remaining(Double(accessory.percent) / 100)
+                        )
+                        .stagger(index: 5 + index, generation: presentation.generation)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct NetworkDetail: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var presentation: PanelPresentation
+
+    var body: some View {
+        GroupedPanel {
+            StatRow(label: "Link", value: model.stats.network.connected ? model.stats.network.kind : "Offline")
+                .stagger(index: 0, generation: presentation.generation)
+
+            if let ssid = model.stats.network.ssid {
+                StatRow(label: "Wi-Fi", value: ssid)
+                    .stagger(index: 1, generation: presentation.generation)
+            }
+            if let ip = model.stats.network.ipAddress {
+                StatRow(label: "IP", value: ip)
+                    .stagger(index: 2, generation: presentation.generation)
+            }
+
+            StatRow(
+                label: "Down",
+                value: model.stats.network.ratesReady
+                    ? StatsFormat.rate(model.stats.network.bytesInPerSecond, compact: false)
+                    : "…"
             )
-            .stagger(index: 1, generation: presentation.generation)
+            .stagger(index: 3, generation: presentation.generation)
+
+            StatRow(
+                label: "Up",
+                value: model.stats.network.ratesReady
+                    ? StatsFormat.rate(model.stats.network.bytesOutPerSecond, compact: false)
+                    : "…"
+            )
+            .stagger(index: 4, generation: presentation.generation)
+        }
+    }
+}
+
+private struct StorageDetail: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var presentation: PanelPresentation
+
+    var body: some View {
+        let volumes = model.stats.volumes.isEmpty
+            ? model.stats.bootVolume.map { [$0] } ?? []
+            : model.stats.volumes
+        return GroupedPanel {
+            if volumes.isEmpty {
+                Text("No disks")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .stagger(index: 0, generation: presentation.generation)
+            } else {
+                ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
+                    MeterRow(
+                        label: volume.name,
+                        value: "\(StatsFormat.gigabytes(volume.free)) free",
+                        fraction: volume.usedFraction,
+                        level: UsageLevel(fraction: volume.usedFraction)
+                    )
+                    .stagger(index: index, generation: presentation.generation)
+                }
+            }
         }
     }
 }
@@ -961,6 +1194,26 @@ private struct SettingsDetail: View {
                     .controlSize(.small)
                 }
                 .stagger(index: 1, generation: presentation.generation)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Menu bar stats")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Glance next to the logo")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Picker("Menu bar stats", selection: $model.menuBarStats) {
+                        ForEach(MenuBarStats.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                }
+                .stagger(index: 2, generation: presentation.generation)
             }
 
             GroupedPanel {
@@ -984,7 +1237,7 @@ private struct SettingsDetail: View {
                     .controlSize(.small)
                     .disabled(model.statusCheckBusy || model.keyboardBusy || model.lidBusy)
                 }
-                .stagger(index: 2, generation: presentation.generation)
+                .stagger(index: 3, generation: presentation.generation)
 
                 if let notice = model.statusCheckNotice {
                     Text(notice)
@@ -1023,7 +1276,7 @@ private struct SettingsDetail: View {
                         .accessibilityLabel("Open latest release")
                     }
                 }
-                .stagger(index: 3, generation: presentation.generation)
+                .stagger(index: 4, generation: presentation.generation)
 
                 if let notice = model.updateCheckNotice {
                     Text(notice)
@@ -1040,7 +1293,7 @@ private struct SettingsDetail: View {
             .foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
-            .stagger(index: 4, generation: presentation.generation)
+            .stagger(index: 5, generation: presentation.generation)
         }
     }
 }
@@ -1076,32 +1329,100 @@ private struct MeterRow: View {
     let label: String
     let value: String
     let fraction: Double
+    var level: UsageLevel? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var level: UsageLevel { UsageLevel(fraction: fraction) }
+    private var resolvedLevel: UsageLevel { level ?? UsageLevel(fraction: fraction) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(label)
                     .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
                 Spacer()
                 Text(value)
                     .font(.system(size: 12, weight: .regular).monospacedDigit())
-                    .foregroundStyle(level.tint ?? Color.secondary)
+                    .foregroundStyle(resolvedLevel.tint ?? Color.secondary)
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.1))
                     Capsule()
-                        .fill(level.tint ?? Color.accentColor)
-                        .frame(width: max(4, geo.size.width * fraction))
+                        .fill(resolvedLevel.tint ?? Color.accentColor)
+                        .frame(width: max(4, geo.size.width * min(max(fraction, 0), 1)))
                 }
             }
             .frame(height: 4)
         }
         .animation(reduceMotion ? nil : Motion.press, value: fraction)
-        .animation(reduceMotion ? nil : Motion.press, value: level)
+        .animation(reduceMotion ? nil : Motion.press, value: resolvedLevel)
+    }
+}
+
+private struct StatRow: View {
+    let label: String
+    let value: String
+    var level: UsageLevel = .normal
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(size: 12, weight: .regular).monospacedDigit())
+                .foregroundStyle(level.tint ?? Color.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+}
+
+private struct ProcessRow: View {
+    let process: ProcessUsage
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(process.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(String(format: "%.0f%%", process.cpuPercent))
+                .font(.system(size: 11, weight: .regular).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 36, alignment: .trailing)
+            Text(StatsFormat.bytes(process.ramBytes))
+                .font(.system(size: 11, weight: .regular).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 52, alignment: .trailing)
+        }
+    }
+}
+
+private struct Sparkline: View {
+    let values: [Double]
+
+    var body: some View {
+        GeometryReader { geo in
+            let maxValue = max(values.max() ?? 1, 0.05)
+            Path { path in
+                guard values.count > 1, geo.size.width > 0 else { return }
+                for (index, value) in values.enumerated() {
+                    let x = geo.size.width * CGFloat(index) / CGFloat(values.count - 1)
+                    let y = geo.size.height * (1 - CGFloat(min(max(value / maxValue, 0), 1)))
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+            }
+            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        }
+        .frame(height: 28)
+        .accessibilityHidden(true)
     }
 }

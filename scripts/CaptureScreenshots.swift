@@ -62,6 +62,18 @@ private func captureAll(to out: URL) throws {
         presentation.route = .machine
         seedHome(model)
     }
+    try write(name: "battery.png", appearance: .darkAqua, to: out) { model, presentation in
+        presentation.route = .battery
+        seedHome(model)
+    }
+    try write(name: "network.png", appearance: .darkAqua, to: out) { model, presentation in
+        presentation.route = .network
+        seedHome(model)
+    }
+    try write(name: "storage.png", appearance: .darkAqua, to: out) { model, presentation in
+        presentation.route = .storage
+        seedHome(model)
+    }
     try write(name: "settings.png", appearance: .darkAqua, to: out) { model, presentation in
         presentation.route = .settings
         seedHome(model)
@@ -99,10 +111,64 @@ private func seedHome(_ model: AppModel) {
     model.awakeStatus = "Staying awake · 47 min left"
     model.awakeError = nil
 
-    model.cpuReady = true
-    model.cpuFraction = 0.12
-    model.ramUsed = 18 * 1_073_741_824
-    model.ramTotal = 36 * 1_073_741_824
+    model.visibleHomeTools = Array(HomeTool.allCases)
+    model.hiddenHomeTools = []
+    model.menuBarStats = .cpu
+    model.stats = demoStats()
+}
+
+@MainActor
+private func demoStats() -> SystemSample {
+    var sample = SystemSample()
+    sample.cpuReady = true
+    sample.cpuFraction = 0.12
+    sample.cpuHistory = [0.08, 0.11, 0.09, 0.14, 0.18, 0.12, 0.10, 0.13, 0.16, 0.12]
+    sample.ramUsed = 18 * 1_073_741_824
+    sample.ramTotal = 36 * 1_073_741_824
+    sample.ramCompressed = 2 * 1_073_741_824
+    sample.swapUsed = 0
+    sample.swapTotal = 0
+    sample.memoryPressure = .normal
+    sample.thermal = .nominal
+    sample.uptimeSeconds = ((2 * 24) + 4) * 3600
+    sample.battery = BatterySample(
+        percent: 0.82,
+        isCharging: false,
+        isPluggedIn: false,
+        isFull: false,
+        minutesToEmpty: 154,
+        minutesToFull: nil,
+        health: "Good",
+        cycleCount: 214
+    )
+    sample.accessories = [
+        AccessoryBattery(name: "Magic Mouse", percent: 64),
+        AccessoryBattery(name: "AirPods Pro", percent: 78)
+    ]
+    sample.bootVolume = VolumeSample(
+        name: "Macintosh HD",
+        path: "/",
+        used: 312 * 1_073_741_824,
+        total: 512 * 1_073_741_824,
+        isBoot: true
+    )
+    sample.volumes = [sample.bootVolume!]
+    sample.network = NetworkSample(
+        connected: true,
+        kind: "Wi-Fi",
+        interfaceName: "en0",
+        ssid: "Studio",
+        ipAddress: "192.168.1.42",
+        bytesInPerSecond: 1_250_000,
+        bytesOutPerSecond: 42_000,
+        ratesReady: true
+    )
+    sample.topProcesses = [
+        ProcessUsage(pid: 1, name: "Cursor", cpuPercent: 18, ramBytes: 2_200_000_000),
+        ProcessUsage(pid: 2, name: "Safari", cpuPercent: 6, ramBytes: 1_100_000_000),
+        ProcessUsage(pid: 3, name: "WindowServer", cpuPercent: 4, ramBytes: 480_000_000)
+    ]
+    return sample
 }
 
 @MainActor
@@ -157,8 +223,8 @@ private func render<V: View>(_ view: V, appearance: NSAppearance.Name, to url: U
     hosting.setFrameSize(size)
     window.setContentSize(size)
     hosting.layoutSubtreeIfNeeded()
-    // Staggered tile entrance: last home tile starts at 0.4s and lasts 0.3s.
-    RunLoop.current.run(until: Date().addingTimeInterval(0.9))
+    // Home has 8 tiles (last stagger 0.7s + 0.3s). This Mac processes go to index 10.
+    RunLoop.current.run(until: Date().addingTimeInterval(1.8))
 
     let bounds = hosting.bounds
     guard let rep = hosting.bitmapImageRepForCachingDisplay(in: bounds) else {

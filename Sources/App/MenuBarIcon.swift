@@ -17,6 +17,24 @@ enum MenuBarDisplay: String, CaseIterable, Identifiable {
     }
 }
 
+enum MenuBarStats: String, CaseIterable, Identifiable {
+    case off
+    case cpu
+    case battery
+    case network
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: "Off"
+        case .cpu: "CPU"
+        case .battery: "Battery"
+        case .network: "Network"
+        }
+    }
+}
+
 enum MenuBarTool: String, CaseIterable {
     case keyboard
     case scroll
@@ -61,27 +79,49 @@ enum MenuBarIcon {
     private static let logoToGridGap: CGFloat = 4
     private static let symbolPointSize: CGFloat = 8
 
-    static func makeImage(mode: MenuBarDisplay, tools: [MenuBarTool]) -> NSImage {
+    static func makeImage(mode: MenuBarDisplay, tools: [MenuBarTool], statsText: String? = nil) -> NSImage {
+        let stats = statsText.flatMap { $0.isEmpty ? nil : $0 }
+        if stats == nil {
+            switch mode {
+            case .logoOnly:
+                return makeLogoImage()
+            case .activeIcons:
+                return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: false, tools: tools)
+            case .logoAndActive:
+                return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: true, tools: tools)
+            }
+        }
         switch mode {
         case .logoOnly:
-            return makeLogoImage()
+            return makeCompositeImage(showLogo: true, tools: [], statsText: stats)
         case .activeIcons:
-            return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: false, tools: tools)
+            return tools.isEmpty
+                ? makeCompositeImage(showLogo: true, tools: [], statsText: stats)
+                : makeCompositeImage(showLogo: false, tools: tools, statsText: stats)
         case .logoAndActive:
-            return tools.isEmpty ? makeLogoImage() : makeCompositeImage(showLogo: true, tools: tools)
+            return tools.isEmpty
+                ? makeCompositeImage(showLogo: true, tools: [], statsText: stats)
+                : makeCompositeImage(showLogo: true, tools: tools, statsText: stats)
         }
     }
 
-    static func statusItemLength(mode: MenuBarDisplay, tools: [MenuBarTool]) -> CGFloat {
-        if mode == .logoOnly || tools.isEmpty {
+    static func statusItemLength(mode: MenuBarDisplay, tools: [MenuBarTool], statsText: String? = nil) -> CGFloat {
+        let stats = statsText.flatMap { $0.isEmpty ? nil : $0 }
+        if stats == nil, mode == .logoOnly || tools.isEmpty {
             return NSStatusItem.squareLength
         }
         return NSStatusItem.variableLength
     }
 
-    static func tooltip(tools: [MenuBarTool]) -> String {
-        if tools.isEmpty { return "NAF Tools" }
-        return "NAF Tools — \(tools.map(\.title).joined(separator: ", "))"
+    static func tooltip(tools: [MenuBarTool], statsText: String? = nil) -> String {
+        var parts = ["NAF Tools"]
+        if let statsText, !statsText.isEmpty {
+            parts.append(statsText)
+        }
+        if !tools.isEmpty {
+            parts.append(tools.map(\.title).joined(separator: ", "))
+        }
+        return parts.joined(separator: " — ")
     }
 
     private static func makeLogoImage() -> NSImage {
@@ -99,12 +139,36 @@ enum MenuBarIcon {
         return NSSize(width: width, height: pointSize.height)
     }
 
-    private static func makeCompositeImage(showLogo: Bool, tools: [MenuBarTool]) -> NSImage {
-        let grid = gridSize(toolCount: tools.count)
-        let size = NSSize(
-            width: showLogo ? pointSize.width + logoToGridGap + grid.width : grid.width,
-            height: pointSize.height
-        )
+    private static let statsFontSize: CGFloat = 11
+    private static let logoToStatsGap: CGFloat = 4
+
+    private static func statsAttributes() -> [NSAttributedString.Key: Any] {
+        [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: statsFontSize, weight: .medium),
+            .foregroundColor: NSColor.black
+        ]
+    }
+
+    private static func statsSize(_ text: String) -> NSSize {
+        let size = (text as NSString).size(withAttributes: statsAttributes())
+        return NSSize(width: ceil(size.width), height: pointSize.height)
+    }
+
+    private static func makeCompositeImage(showLogo: Bool, tools: [MenuBarTool], statsText: String? = nil) -> NSImage {
+        let grid = tools.isEmpty ? NSSize.zero : gridSize(toolCount: tools.count)
+        let stats = statsText.map(statsSize) ?? .zero
+        var width: CGFloat = 0
+        if showLogo { width += pointSize.width }
+        if !tools.isEmpty {
+            if width > 0 { width += logoToGridGap }
+            width += grid.width
+        }
+        if stats.width > 0 {
+            if width > 0 { width += logoToStatsGap }
+            width += stats.width
+        }
+        if width == 0 { width = pointSize.width }
+        let size = NSSize(width: width, height: pointSize.height)
         let image = NSImage(size: size, flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.setShouldAntialias(true)
@@ -112,18 +176,29 @@ enum MenuBarIcon {
             var originX: CGFloat = 0
             if showLogo {
                 drawMark(ctx, in: pointSize)
-                originX = pointSize.width + logoToGridGap
+                originX = pointSize.width
             }
-            for (index, tool) in tools.enumerated() {
-                let col = index / 2
-                let isTop = index % 2 == 0
-                let frame = CGRect(
-                    x: originX + CGFloat(col) * (gridCell + gridGap),
-                    y: isTop ? gridCell + gridGap : 0,
-                    width: gridCell,
-                    height: gridCell
+            if !tools.isEmpty {
+                if showLogo { originX += logoToGridGap }
+                for (index, tool) in tools.enumerated() {
+                    let col = index / 2
+                    let isTop = index % 2 == 0
+                    let frame = CGRect(
+                        x: originX + CGFloat(col) * (gridCell + gridGap),
+                        y: isTop ? gridCell + gridGap : 0,
+                        width: gridCell,
+                        height: gridCell
+                    )
+                    drawSymbol(tool, in: frame)
+                }
+                originX += grid.width
+            }
+            if let statsText {
+                if originX > 0 { originX += logoToStatsGap }
+                (statsText as NSString).draw(
+                    at: NSPoint(x: originX, y: (pointSize.height - statsFontSize) / 2 - 1),
+                    withAttributes: statsAttributes()
                 )
-                drawSymbol(tool, in: frame)
             }
             return true
         }

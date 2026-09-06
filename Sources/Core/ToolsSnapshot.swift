@@ -49,6 +49,33 @@ struct MacStatusJSON: Encodable {
     var cpuPercent: Int
     var ramUsedBytes: UInt64
     var ramTotalBytes: UInt64
+    var ramCompressedBytes: UInt64
+    var swapUsedBytes: UInt64
+    var swapTotalBytes: UInt64
+    var memoryPressure: String
+    var thermal: String
+    var uptimeSeconds: Int
+    var batteryPercent: Int?
+    var batteryCharging: Bool?
+    var diskUsedBytes: UInt64?
+    var diskTotalBytes: UInt64?
+    var networkKind: String
+    var networkIP: String?
+    var networkDownBytesPerSecond: UInt64
+    var networkUpBytesPerSecond: UInt64
+    var accessories: [AccessoryBatteryJSON]
+    var processes: [ProcessJSON]
+}
+
+struct AccessoryBatteryJSON: Encodable {
+    var name: String
+    var percent: Int
+}
+
+struct ProcessJSON: Encodable {
+    var name: String
+    var cpuPercent: Int
+    var ramBytes: UInt64
 }
 
 struct ToolsSnapshot: Encodable {
@@ -98,7 +125,31 @@ enum StatusBuilder {
         return MacStatusJSON(
             cpuPercent: sample.cpuReady ? Int((sample.cpuFraction * 100).rounded()) : 0,
             ramUsedBytes: sample.ramUsed,
-            ramTotalBytes: sample.ramTotal
+            ramTotalBytes: sample.ramTotal,
+            ramCompressedBytes: sample.ramCompressed,
+            swapUsedBytes: sample.swapUsed,
+            swapTotalBytes: sample.swapTotal,
+            memoryPressure: sample.memoryPressure.label.lowercased(),
+            thermal: StatsFormat.thermal(sample.thermal).lowercased(),
+            uptimeSeconds: Int(sample.uptimeSeconds.rounded(.down)),
+            batteryPercent: sample.battery.map { Int(($0.percent * 100).rounded()) },
+            batteryCharging: sample.battery?.isCharging,
+            diskUsedBytes: sample.bootVolume?.used,
+            diskTotalBytes: sample.bootVolume?.total,
+            networkKind: sample.network.kind.lowercased(),
+            networkIP: sample.network.ipAddress,
+            networkDownBytesPerSecond: sample.network.bytesInPerSecond,
+            networkUpBytesPerSecond: sample.network.bytesOutPerSecond,
+            accessories: sample.accessories.map {
+                AccessoryBatteryJSON(name: $0.name, percent: $0.percent)
+            },
+            processes: sample.topProcesses.map {
+                ProcessJSON(
+                    name: $0.name,
+                    cpuPercent: Int($0.cpuPercent.rounded()),
+                    ramBytes: $0.ramBytes
+                )
+            }
         )
     }
 

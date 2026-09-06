@@ -36,6 +36,9 @@ enum PanelRoute: Equatable {
     case lid
     case awake
     case machine
+    case battery
+    case network
+    case storage
     case settings
 
     var title: String {
@@ -46,6 +49,9 @@ enum PanelRoute: Equatable {
         case .lid: "Lid Sleep"
         case .awake: "Awake"
         case .machine: "This Mac"
+        case .battery: "Battery"
+        case .network: "Network"
+        case .storage: "Storage"
         case .settings: "Settings"
         }
     }
@@ -57,6 +63,9 @@ enum HomeTool: String, CaseIterable, Identifiable {
     case lid
     case awake
     case machine
+    case battery
+    case network
+    case storage
 
     var id: String { rawValue }
 
@@ -67,6 +76,9 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .lid: "Lid Sleep"
         case .awake: "Awake"
         case .machine: "This Mac"
+        case .battery: "Battery"
+        case .network: "Network"
+        case .storage: "Storage"
         }
     }
 
@@ -77,6 +89,9 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .lid: "moon.zzz"
         case .awake: "cup.and.saucer"
         case .machine: "cpu"
+        case .battery: "battery.100percent"
+        case .network: "wifi"
+        case .storage: "internaldrive"
         }
     }
 
@@ -87,6 +102,9 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .lid: "moon.zzz.fill"
         case .awake: "cup.and.saucer.fill"
         case .machine: "cpu.fill"
+        case .battery: "battery.100percent"
+        case .network: "wifi"
+        case .storage: "internaldrive.fill"
         }
     }
 
@@ -96,7 +114,14 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .scroll: ModuleColor.scroll
         case .lid: ModuleColor.lid
         case .awake: ModuleColor.awake
-        case .machine: ModuleColor.machine
+        case .machine, .battery, .network, .storage: ModuleColor.machine
+        }
+    }
+
+    var isInformational: Bool {
+        switch self {
+        case .machine, .battery, .network, .storage: true
+        default: false
         }
     }
 
@@ -114,6 +139,9 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .lid: .lid
         case .awake: .awake
         case .machine: .machine
+        case .battery: .battery
+        case .network: .network
+        case .storage: .storage
         }
     }
 }
@@ -176,6 +204,10 @@ enum UsageLevel: Equatable {
         } else {
             self = .normal
         }
+    }
+
+    static func remaining(_ fraction: Double) -> UsageLevel {
+        UsageLevel(fraction: 1 - fraction)
     }
 
     var tint: Color? {

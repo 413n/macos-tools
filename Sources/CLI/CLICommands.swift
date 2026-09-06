@@ -209,7 +209,22 @@ enum CLICommands {
     private static func humanMac(_ status: MacStatusJSON) -> String {
         let used = formatGB(status.ramUsedBytes)
         let total = formatGB(status.ramTotalBytes)
-        return "CPU \(status.cpuPercent)%  RAM \(used) / \(total)"
+        var parts = ["CPU \(status.cpuPercent)%", "RAM \(used) / \(total)"]
+        parts.append("pressure \(status.memoryPressure)")
+        if let diskUsed = status.diskUsedBytes, let diskTotal = status.diskTotalBytes, diskTotal > 0 {
+            parts.append("disk \(formatGB(diskTotal - diskUsed)) free")
+        }
+        if let battery = status.batteryPercent {
+            let charge = status.batteryCharging == true ? " charging" : ""
+            parts.append("battery \(battery)%\(charge)")
+        }
+        parts.append(status.networkKind)
+        if status.networkDownBytesPerSecond > 0 || status.networkUpBytesPerSecond > 0 {
+            parts.append(
+                "↓\(StatsFormat.rate(status.networkDownBytesPerSecond, compact: true)) ↑\(StatsFormat.rate(status.networkUpBytesPerSecond, compact: true))"
+            )
+        }
+        return parts.joined(separator: "  ")
     }
 
     private static func formatRemaining(_ seconds: Int) -> String {

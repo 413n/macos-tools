@@ -92,6 +92,7 @@ final class MenuBarController: NSObject {
         ))
         menu.addItem(.separator())
         menu.addItem(menuBarDisplayItem())
+        menu.addItem(menuBarStatsItem())
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(quitFromMenu), keyEquivalent: "q")
 
@@ -162,6 +163,26 @@ final class MenuBarController: NSObject {
         model.menuBarDisplay = modes[sender.tag]
     }
 
+    private func menuBarStatsItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Menu bar stats", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for (index, mode) in MenuBarStats.allCases.enumerated() {
+            let entry = NSMenuItem(title: mode.title, action: #selector(selectMenuBarStats(_:)), keyEquivalent: "")
+            entry.tag = index
+            entry.state = model.menuBarStats == mode ? .on : .off
+            entry.target = self
+            submenu.addItem(entry)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func selectMenuBarStats(_ sender: NSMenuItem) {
+        let modes = MenuBarStats.allCases
+        guard modes.indices.contains(sender.tag) else { return }
+        model.menuBarStats = modes[sender.tag]
+    }
+
     private static func makeStatusItem() -> NSStatusItem {
         NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     }
@@ -184,12 +205,12 @@ final class MenuBarController: NSObject {
         guard let button = statusItem.button else { return }
         let mode = model.menuBarDisplay
         let tools = model.activeMenuBarTools
-        statusItem.length = MenuBarIcon.statusItemLength(mode: mode, tools: tools)
+        statusItem.length = MenuBarIcon.statusItemLength(mode: mode, tools: tools, statsText: model.menuBarStatsText)
         button.image = nil
-        button.image = MenuBarIcon.makeImage(mode: mode, tools: tools)
+        button.image = MenuBarIcon.makeImage(mode: mode, tools: tools, statsText: model.menuBarStatsText)
         button.imageScaling = .scaleNone
         button.imagePosition = .imageOnly
-        button.toolTip = MenuBarIcon.tooltip(tools: tools)
+        button.toolTip = MenuBarIcon.tooltip(tools: tools, statsText: model.menuBarStatsText)
     }
 
     private func observeActiveTools() {
@@ -200,6 +221,8 @@ final class MenuBarController: NSObject {
             model.$awakeActive
         )
         .combineLatest(model.$menuBarDisplay)
+        .combineLatest(model.$menuBarStats)
+        .combineLatest(model.$stats)
         .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in
             self?.applyIcon()
