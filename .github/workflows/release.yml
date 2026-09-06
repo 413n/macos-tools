@@ -47,7 +47,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Releasing $tag"
 
-      - name: Build dist zip
+      - name: Build dist disk image
         run: ./build.sh --dist
 
       - name: Commit version bump
@@ -70,12 +70,12 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           NOTES: ${{ inputs.notes }}
         run: |
-          zip="build/NAF-Tools-${VERSION}.zip"
+          dmg="build/NAF-Tools-${VERSION}.dmg"
           git tag "$TAG"
           git push origin "$TAG"
           title="NAF Tools ${VERSION}"
           if [[ -n "$NOTES" ]]; then
-            gh release create "$TAG" "$zip" --title "$title" --notes "$NOTES"
+            gh release create "$TAG" "$dmg" --title "$title" --notes "$NOTES"
           else
-            gh release create "$TAG" "$zip" --title "$title" --generate-notes
+            gh release create "$TAG" "$dmg" --title "$title" --generate-notes
           fi

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Build NAF Tools as a menu-bar .app (plus naf-tools CLI) and install to ~/Applications.
-# Pass --dist to skip install and write a versioned zip under build/.
+# Pass --dist to skip install and write a versioned disk image under build/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,13 +13,13 @@ SDK="$(xcrun --show-sdk-path)"
 DEST="$HOME/Applications/${APP_NAME}.app"
 SIGN_CN="NAF Tools Signing"
 SKIP_INSTALL=0
-MAKE_ZIP=0
+MAKE_DMG=0
 
 for arg in "$@"; do
   case "$arg" in
     --dist)
       SKIP_INSTALL=1
-      MAKE_ZIP=1
+      MAKE_DMG=1
       ;;
     --skip-install)
       SKIP_INSTALL=1
@@ -129,13 +129,36 @@ else
   codesign --force --sign - --identifier com.alessandro.naf-tools "$APP" >/dev/null
 fi
 
-if [[ "$MAKE_ZIP" == "1" ]]; then
+if [[ "$MAKE_DMG" == "1" ]]; then
+  echo "→ disk image"
   VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
-  ZIP="$BUILD/NAF-Tools-${VERSION}.zip"
-  rm -f "$ZIP"
-  ditto -c -k --keepParent "$APP" "$ZIP"
+  DMG="$BUILD/NAF-Tools-${VERSION}.dmg"
+  STAGE="$BUILD/dmg"
+  rm -rf "$STAGE" "$DMG"
+  mkdir -p "$STAGE"
+  ditto "$APP" "$STAGE/${APP_NAME}.app"
+  ln -s /Applications "$STAGE/Applications"
+  created=0
+  for attempt in 1 2 3; do
+    if hdiutil create \
+      -volname "$APP_NAME" \
+      -srcfolder "$STAGE" \
+      -ov \
+      -format UDZO \
+      -imagekey zlib-level=9 \
+      "$DMG" >/dev/null; then
+      created=1
+      break
+    fi
+    sleep 2
+  done
+  rm -rf "$STAGE"
+  if [[ "$created" != "1" ]]; then
+    echo "failed to create $DMG" >&2
+    exit 1
+  fi
   echo
-  echo "Dist: $ZIP"
+  echo "Dist: $DMG"
 fi
 
 if [[ "$SKIP_INSTALL" == "1" ]]; then

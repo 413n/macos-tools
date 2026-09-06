@@ -151,16 +151,18 @@ Each tool remembers the last On/Off you chose. Opening the app again restores th
 
 ## Install
 
+Download the disk image from the [latest GitHub release](https://github.com/413n/macos-tools/releases/latest), open it, and drag **NAF Tools** onto **Applications**. Then open the app from Applications (or Spotlight). Look for the N logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
+
+If Gatekeeper blocks it, right-click the app → Open. The release is signed locally, not notarized.
+
+From source:
+
 ```sh
 ./build.sh
 open ~/Applications/NAF\ Tools.app
 ```
 
-Look for the N logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
-
-The CLI is installed at `~/.local/bin/naf-tools`. Add that directory to `PATH` if needed.
-
-The first build is signed with a local identity. If Gatekeeper blocks it, right-click the app → Open.
+That also installs the CLI at `~/.local/bin/naf-tools`. After a disk-image install, the same binary lives at `/Applications/NAF Tools.app/Contents/MacOS/naf-tools`. Add `~/.local/bin` to `PATH` if needed.
 
 macOS 14 or later.
 
