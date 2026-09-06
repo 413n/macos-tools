@@ -47,6 +47,9 @@ final class AppModel: ObservableObject {
     @Published var loginItemNotice: String?
     @Published var statusCheckNotice: String?
     @Published var statusCheckBusy = false
+    @Published var updateCheckNotice: String?
+    @Published var updateCheckBusy = false
+    @Published var newerVersion: String?
     @Published var keyboardBusy = false
     @Published var cpuFraction: Double = 0
     @Published var cpuReady = false
@@ -77,6 +80,9 @@ final class AppModel: ObservableObject {
     private let stats = SystemStatsService()
     private var wakeObserver: NSObjectProtocol?
     private var accessibilityTimer: Timer?
+    private var updateCheckTask: URLSessionDataTask?
+    private var updateCheckEpoch = 0
+    private var latestReleaseURL: URL?
 
     private enum Keys {
         static let autoUnlockMinutes = "autoUnlockMinutes"
@@ -165,6 +171,10 @@ final class AppModel: ObservableObject {
         ramTotal > 0 ? UsageLevel(fraction: ramFraction) : .normal
     }
 
+    var appVersion: String {
+        UpdateCheckService.currentVersion
+    }
+
     static func gigabytes(_ bytes: UInt64) -> String {
         let gb = Double(bytes) / 1_073_741_824
         if gb >= 10 {
@@ -226,6 +236,9 @@ final class AppModel: ObservableObject {
         }
         stats.stop()
         ScrollReverseService.shared.stop()
+        updateCheckEpoch += 1
+        updateCheckTask?.cancel()
+        updateCheckTask = nil
         stopAwakeTick()
         caffeinate.stop()
         // Leave the hidutil mapping and the bash auto-unlock timer running so
@@ -571,6 +584,44 @@ final class AppModel: ObservableObject {
             self.statusCheckBusy = false
             self.statusCheckNotice = "Updated from this Mac"
         }
+    }
+
+    func checkLatestVersion() {
+        guard !updateCheckBusy else { return }
+        updateCheckBusy = true
+        updateCheckNotice = nil
+        newerVersion = nil
+        latestReleaseURL = nil
+        updateCheckEpoch += 1
+        let epoch = updateCheckEpoch
+        updateCheckTask?.cancel()
+        updateCheckTask = UpdateCheckService.fetchLatest { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self, epoch == self.updateCheckEpoch else { return }
+                self.updateCheckBusy = false
+                self.updateCheckTask = nil
+                switch result {
+                case .success(let release):
+                    self.latestReleaseURL = release.pageURL
+                    switch UpdateCheckService.compare(latest: release.version, current: self.appVersion) {
+                    case .orderedDescending:
+                        self.newerVersion = release.version
+                        self.updateCheckNotice = "\(release.version) is available"
+                    case .orderedSame:
+                        self.updateCheckNotice = "You're on the latest version"
+                    case .orderedAscending:
+                        self.updateCheckNotice = "This build is ahead of GitHub"
+                    }
+                case .failure(let error):
+                    self.updateCheckNotice = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func openLatestRelease() {
+        let url = latestReleaseURL ?? UpdateCheckService.releasesPageURL
+        NSWorkspace.shared.open(url)
     }
 
     private func restoreKeyboardIfNeeded() {

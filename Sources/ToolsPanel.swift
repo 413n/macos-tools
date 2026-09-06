@@ -37,6 +37,12 @@ struct ToolsPanel: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
+            if presentation.route == .home {
+                Text(model.appVersion)
+                    .font(.system(size: 11, weight: .regular).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer(minLength: 8)
 
             if presentation.route != .settings {
@@ -694,6 +700,45 @@ private struct SettingsDetail: View {
                 }
             }
 
+            GroupedPanel {
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Version")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(model.appVersion)
+                            .font(.system(size: 11).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    if model.updateCheckBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                            .accessibilityLabel("Checking for updates")
+                    }
+                    Button("Check") {
+                        model.checkLatestVersion()
+                    }
+                    .controlSize(.small)
+                    .disabled(model.updateCheckBusy)
+                    .accessibilityLabel("Check latest version")
+                    if model.newerVersion != nil {
+                        Button("Open") {
+                            model.openLatestRelease()
+                        }
+                        .controlSize(.small)
+                        .accessibilityLabel("Open latest release")
+                    }
+                }
+                .stagger(index: 3, generation: presentation.generation)
+
+                if let notice = model.updateCheckNotice {
+                    Text(notice)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Button("Quit NAF Tools") {
                 model.quit()
             }
@@ -701,7 +746,7 @@ private struct SettingsDetail: View {
             .foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
-            .stagger(index: 3, generation: presentation.generation)
+            .stagger(index: 4, generation: presentation.generation)
         }
     }
 }

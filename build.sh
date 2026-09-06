@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Build NAF Tools as a menu-bar .app and install it to ~/Applications.
+# Pass --dist to skip install and write a versioned zip under build/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,8 +12,31 @@ APP="$BUILD/${APP_NAME}.app"
 SDK="$(xcrun --show-sdk-path)"
 DEST="$HOME/Applications/${APP_NAME}.app"
 SIGN_CN="NAF Tools Signing"
+SKIP_INSTALL=0
+MAKE_ZIP=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --dist)
+      SKIP_INSTALL=1
+      MAKE_ZIP=1
+      ;;
+    --skip-install)
+      SKIP_INSTALL=1
+      ;;
+    *)
+      echo "unknown argument: $arg" >&2
+      echo "usage: $0 [--dist] [--skip-install]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 ensure_codesign_identity() {
+  if [[ "${CI:-}" == "true" ]]; then
+    echo ""
+    return 0
+  fi
   if security find-identity -p codesigning 2>/dev/null | grep -F "$SIGN_CN" >/dev/null; then
     echo "$SIGN_CN"
     return 0
@@ -82,6 +106,20 @@ if [[ -n "$SIGN_ID" ]] && codesign --force --sign "$SIGN_ID" --identifier com.al
 else
   echo "  signed ad-hoc (rebuilds will need Accessibility toggled again)"
   codesign --force --sign - --identifier com.alessandro.naf-tools "$APP" >/dev/null
+fi
+
+if [[ "$MAKE_ZIP" == "1" ]]; then
+  VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+  ZIP="$BUILD/NAF-Tools-${VERSION}.zip"
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  echo
+  echo "Dist: $ZIP"
+fi
+
+if [[ "$SKIP_INSTALL" == "1" ]]; then
+  echo "Built: $APP"
+  exit 0
 fi
 
 mkdir -p "$HOME/Applications"
