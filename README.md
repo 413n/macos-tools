@@ -1,7 +1,7 @@
 # NAF Tools
 
 <p align="center">
-  <img src="docs/screenshots/icon.png" width="96" alt="NAF Tools icon">
+  <img src="docs/screenshots/icon.png" width="128" alt="NAF Tools icon">
 </p>
 
 <p align="center">

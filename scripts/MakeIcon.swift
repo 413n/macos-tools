@@ -1,15 +1,76 @@
 import AppKit
+import CoreText
 import Foundation
 
 guard CommandLine.arguments.count >= 2 else {
-    fputs("usage: make-icon OUT.icns\n", stderr)
+    fputs("usage: make-icon OUT.icns [PREVIEW.png]\n", stderr)
     exit(1)
 }
 
 let icnsURL = URL(fileURLWithPath: CommandLine.arguments[1])
+let previewURL = CommandLine.arguments.count >= 3 ? URL(fileURLWithPath: CommandLine.arguments[2]) : nil
 let iconset = FileManager.default.temporaryDirectory.appendingPathComponent("NAFTools.iconset")
 try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
+
+/// Same geometry as `Resources/logo.svg` / `NarcisoMark`.
+enum NarcisoMark {
+    static let canvas: CGFloat = 500
+
+    static func cgPath() -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: 500))
+        path.addLine(to: CGPoint(x: 100.607, y: 500))
+        path.addLine(to: CGPoint(x: 100.607, y: 263.5))
+        path.addLine(to: CGPoint(x: 258, y: 500))
+        path.addLine(to: CGPoint(x: 392, y: 500))
+        path.addLine(to: CGPoint(x: 59.29, y: 0))
+        path.closeSubpath()
+
+        path.move(to: CGPoint(x: 500, y: 500))
+        path.addLine(to: CGPoint(x: 500, y: 0))
+        path.addLine(to: CGPoint(x: 399.393, y: 0))
+        path.addLine(to: CGPoint(x: 399.393, y: 236.5))
+        path.addLine(to: CGPoint(x: 242, y: 0))
+        path.addLine(to: CGPoint(x: 108, y: 0))
+        path.addLine(to: CGPoint(x: 440.71, y: 500))
+        path.closeSubpath()
+        return path
+    }
+}
+
+func toolsLine(matchingWidth width: CGFloat) -> (CTLine, CGRect) {
+    let fontSize = width * 0.24
+    let font = NSFont.systemFont(ofSize: fontSize, weight: .black)
+    let white = NSColor.white
+
+    func makeLine(kern: CGFloat) -> CTLine {
+        let styled = NSMutableAttributedString(string: "TOOLS", attributes: [
+            .font: font,
+            .foregroundColor: white
+        ])
+        if styled.length > 1 {
+            styled.addAttribute(.kern, value: kern, range: NSRange(location: 0, length: styled.length - 1))
+        }
+        return CTLineCreateWithAttributedString(styled)
+    }
+
+    let natural = CTLineGetImageBounds(makeLine(kern: 0), nil)
+    let kern = (width - natural.width) / 4
+    let line = makeLine(kern: kern)
+    return (line, CTLineGetImageBounds(line, nil))
+}
+
+func drawMark(_ ctx: CGContext, in rect: CGRect) {
+    ctx.saveGState()
+    ctx.translateBy(x: rect.minX, y: rect.maxY)
+    ctx.scaleBy(x: rect.width / NarcisoMark.canvas, y: -rect.height / NarcisoMark.canvas)
+    ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+    ctx.addPath(NarcisoMark.cgPath())
+    ctx.fillPath()
+    ctx.restoreGState()
+}
 
 func render(pixels: Int) -> NSBitmapImageRep {
     let rep = NSBitmapImageRep(
@@ -29,70 +90,48 @@ func render(pixels: Int) -> NSBitmapImageRep {
     NSGraphicsContext.current = gc
     let ctx = gc.cgContext
     ctx.setShouldAntialias(true)
-    ctx.translateBy(x: 0, y: CGFloat(pixels))
-    ctx.scaleBy(x: 1, y: -1)
+    ctx.interpolationQuality = .high
 
     let s = CGFloat(pixels)
     let inset = s * 0.08
-    let rect = CGRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
-    let radius = s * 0.22
+    let plate = CGRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+    let radius = plate.width * 0.22
 
-    let plate = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
-    ctx.setFillColor(CGColor(red: 0.13, green: 0.11, blue: 0.09, alpha: 1))
-    ctx.addPath(plate)
-    ctx.fillPath()
-
-    ctx.saveGState()
-    ctx.addPath(plate)
-    ctx.clip()
-    let gradient = CGGradient(
-        colorsSpace: CGColorSpaceCreateDeviceRGB(),
-        colors: [
-            CGColor(red: 0.42, green: 0.24, blue: 0.10, alpha: 0.55),
-            CGColor(red: 0.10, green: 0.18, blue: 0.16, alpha: 0.35),
-            CGColor(red: 0.08, green: 0.07, blue: 0.06, alpha: 0)
-        ] as CFArray,
-        locations: [0, 0.55, 1]
-    )!
-    ctx.drawLinearGradient(
-        gradient,
-        start: CGPoint(x: rect.minX, y: rect.maxY),
-        end: CGPoint(x: rect.maxX, y: rect.minY),
-        options: []
+    let shape = CGPath(
+        roundedRect: plate,
+        cornerWidth: radius,
+        cornerHeight: radius,
+        transform: nil
     )
-    ctx.restoreGState()
-
-    ctx.setStrokeColor(CGColor(red: 0.90, green: 0.52, blue: 0.24, alpha: 0.55))
-    ctx.setLineWidth(s * 0.018)
-    ctx.addPath(plate)
-    ctx.strokePath()
-
-    let copper = CGColor(red: 0.90, green: 0.52, blue: 0.24, alpha: 1)
-    let shackleRect = CGRect(x: s * 0.33, y: s * 0.52, width: s * 0.34, height: s * 0.26)
-    ctx.setStrokeColor(copper)
-    ctx.setLineWidth(s * 0.055)
-    ctx.setLineCap(.round)
-    ctx.addPath(CGPath(roundedRect: shackleRect, cornerWidth: s * 0.17, cornerHeight: s * 0.17, transform: nil))
-    ctx.strokePath()
-
-    let body = CGRect(x: s * 0.28, y: s * 0.24, width: s * 0.44, height: s * 0.36)
-    ctx.setFillColor(copper)
-    ctx.addPath(CGPath(roundedRect: body, cornerWidth: s * 0.07, cornerHeight: s * 0.07, transform: nil))
+    ctx.setFillColor(CGColor(gray: 0, alpha: 1))
+    ctx.addPath(shape)
     ctx.fillPath()
 
-    ctx.setFillColor(CGColor(red: 0.13, green: 0.11, blue: 0.09, alpha: 1))
-    ctx.fillEllipse(in: CGRect(x: s * 0.455, y: s * 0.38, width: s * 0.09, height: s * 0.09))
-    ctx.fill(CGRect(x: s * 0.485, y: s * 0.28, width: s * 0.03, height: s * 0.12))
+    let showWordmark = pixels >= 128
+    if showWordmark {
+        let logoWidth = plate.width * 0.58
+        let (line, glyphs) = toolsLine(matchingWidth: logoWidth)
+        let gap = logoWidth * 0.08
+        let stackHeight = logoWidth + gap + glyphs.height
+        let stackMinY = plate.midY - stackHeight / 2 + plate.height * 0.015
+        let originX = plate.midX - logoWidth / 2
+        let logoRect = CGRect(x: originX, y: stackMinY + glyphs.height + gap, width: logoWidth, height: logoWidth)
+        drawMark(ctx, in: logoRect)
 
-    ctx.setFillColor(CGColor(red: 0.46, green: 0.76, blue: 0.62, alpha: 1))
-    let mouse = CGRect(x: s * 0.62, y: s * 0.16, width: s * 0.20, height: s * 0.24)
-    ctx.addPath(CGPath(roundedRect: mouse, cornerWidth: s * 0.09, cornerHeight: s * 0.09, transform: nil))
-    ctx.fillPath()
-    ctx.setStrokeColor(CGColor(red: 0.10, green: 0.09, blue: 0.08, alpha: 0.55))
-    ctx.setLineWidth(s * 0.012)
-    ctx.move(to: CGPoint(x: mouse.midX, y: mouse.minY + s * 0.04))
-    ctx.addLine(to: CGPoint(x: mouse.midX, y: mouse.midY))
-    ctx.strokePath()
+        ctx.saveGState()
+        ctx.textPosition = CGPoint(x: originX - glyphs.minX, y: stackMinY - glyphs.minY)
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
+    } else {
+        let logoWidth = plate.width * 0.64
+        let logoRect = CGRect(
+            x: plate.midX - logoWidth / 2,
+            y: plate.midY - logoWidth / 2,
+            width: logoWidth,
+            height: logoWidth
+        )
+        drawMark(ctx, in: logoRect)
+    }
 
     NSGraphicsContext.restoreGraphicsState()
     return rep
@@ -126,4 +165,9 @@ if process.terminationStatus != 0 {
     fputs("iconutil failed\n", stderr)
     exit(1)
 }
+
+if let previewURL {
+    try render(pixels: 512).representation(using: .png, properties: [:])!.write(to: previewURL)
+}
+
 try? FileManager.default.removeItem(at: iconset)
