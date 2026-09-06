@@ -13,14 +13,20 @@
   <img src="docs/screenshots/home-light.png" width="300" alt="NAF Tools home panel in light mode">
   <img src="docs/screenshots/home-dark.png" width="300" alt="NAF Tools home panel in dark mode">
 </p>
+<p align="center">
+  <img src="docs/screenshots/stats-light.png" width="300" alt="NAF Tools stats tab in light mode">
+  <img src="docs/screenshots/stats-dark.png" width="300" alt="NAF Tools stats tab in dark mode">
+</p>
 
-Click the **N** in the menu bar to open a 2-column grid of tiles. Each tile is one tool:
+Click the **N** in the menu bar to open a 2-column grid. **Tools** and **Stats** are separate tabs; the one you last used is remembered.
+
+Each Tools tile is one utility:
 
 - Tap the **icon** to toggle it with the current options.
 - Tap the **rest of the tile** for the detail screen.
 - The **gear** opens Settings. Closing the popover always returns you home.
 
-Active tiles fill with their color (orange keyboard, brown awake, and so on). Off tiles stay quiet. **This Mac**, **Battery**, **Network**, and **Storage** are informational only. This Mac shows live CPU and RAM; the others show charge, throughput, and free space while the panel is open.
+Active tiles fill with their color (orange keyboard, brown awake, and so on). Off tiles stay quiet. **This Mac**, **Battery**, **Network**, and **Storage** live on the Stats tab and are informational only. This Mac shows live CPU and RAM; the others show charge, throughput, and free space while the panel is open.
 
 ## Keyboard lock
 

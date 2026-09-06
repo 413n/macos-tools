@@ -57,6 +57,27 @@ enum PanelRoute: Equatable {
     }
 }
 
+enum HomeTab: String, CaseIterable, Identifiable {
+    case tools
+    case stats
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tools: "Tools"
+        case .stats: "Stats"
+        }
+    }
+
+    var emptyLabel: String {
+        switch self {
+        case .tools: "No tools"
+        case .stats: "No stats"
+        }
+    }
+}
+
 enum HomeTool: String, CaseIterable, Identifiable {
     case keyboard
     case scroll
@@ -123,6 +144,10 @@ enum HomeTool: String, CaseIterable, Identifiable {
         case .machine, .battery, .network, .storage: true
         default: false
         }
+    }
+
+    var tab: HomeTab {
+        isInformational ? .stats : .tools
     }
 
     var opticalNudge: CGSize {

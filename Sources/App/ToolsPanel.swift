@@ -113,9 +113,11 @@ private struct HomeGrid: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Radius.grid) {
-            if model.visibleHomeTools.isEmpty {
+            HomeTabBar(selection: $model.homeTab)
+
+            if model.tabVisibleHomeTools.isEmpty {
                 if !presentation.isEditingHome {
-                    Text("No tools")
+                    Text(model.homeTab.emptyLabel)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -125,14 +127,14 @@ private struct HomeGrid: View {
                 tileGrid
             }
 
-            if presentation.isEditingHome, !model.hiddenHomeTools.isEmpty {
+            if presentation.isEditingHome, !model.tabHiddenHomeTools.isEmpty {
                 Text("Hidden")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.top, 6)
 
                 GroupedPanel {
-                    ForEach(Array(model.hiddenHomeTools.enumerated()), id: \.element.id) { index, tool in
+                    ForEach(Array(model.tabHiddenHomeTools.enumerated()), id: \.element.id) { index, tool in
                         if index > 0 {
                             Divider()
                         }
@@ -145,18 +147,23 @@ private struct HomeGrid: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : Motion.enter, value: model.hiddenHomeTools)
+        .animation(reduceMotion ? nil : Motion.enter, value: model.tabHiddenHomeTools)
         .animation(reduceMotion ? nil : Motion.enter, value: presentation.isEditingHome)
+        .animation(reduceMotion ? nil : Motion.enter, value: model.homeTab)
         .onChange(of: presentation.isEditingHome) { _, editing in
             if !editing {
                 cancelDrag()
             }
         }
+        .onChange(of: model.homeTab) { _, _ in
+            cancelDrag()
+            presentation.generation += 1
+        }
     }
 
     private var tileGrid: some View {
         LazyVGrid(columns: columns, spacing: Radius.grid) {
-            ForEach(Array(model.visibleHomeTools.enumerated()), id: \.element.id) { index, tool in
+            ForEach(Array(model.tabVisibleHomeTools.enumerated()), id: \.element.id) { index, tool in
                 visibleCell(tool)
                     .stagger(index: index, generation: presentation.generation)
             }
@@ -347,7 +354,7 @@ private struct HomeGrid: View {
 
         if dragging == nil {
             dragging = tool
-            if let index = model.visibleHomeTools.firstIndex(of: tool) {
+            if let index = model.tabVisibleHomeTools.firstIndex(of: tool) {
                 dragStartFrame = slotFrame(index: index)
             }
             var snap = Transaction()
@@ -368,7 +375,7 @@ private struct HomeGrid: View {
         withTransaction(follow) {
             dragTranslation = value.translation
         }
-        guard let current = model.visibleHomeTools.firstIndex(of: tool) else { return }
+        guard let current = model.tabVisibleHomeTools.firstIndex(of: tool) else { return }
         let center = CGPoint(
             x: dragStartFrame.midX + value.translation.width,
             y: dragStartFrame.midY + value.translation.height
@@ -384,7 +391,7 @@ private struct HomeGrid: View {
         guard let tool = dragging else { return }
         settling = true
         let destination: CGRect = {
-            if let index = model.visibleHomeTools.firstIndex(of: tool) {
+            if let index = model.tabVisibleHomeTools.firstIndex(of: tool) {
                 return slotFrame(index: index)
             }
             return dragStartFrame
@@ -428,7 +435,7 @@ private struct HomeGrid: View {
     }
 
     private func slotIndex(at point: CGPoint, current: Int) -> Int {
-        let count = model.visibleHomeTools.count
+        let count = model.tabVisibleHomeTools.count
         guard count > 0 else { return 0 }
         let cell = cellSize
         let gap = Radius.grid
@@ -443,6 +450,43 @@ private struct HomeGrid: View {
             return current
         }
         return proposed
+    }
+}
+
+private struct HomeTabBar: View {
+    @Binding var selection: HomeTab
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(HomeTab.allCases) { tab in
+                let selected = selection == tab
+                Button {
+                    selection = tab
+                } label: {
+                    Text(tab.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selected ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(selected ? ModuleColor.glyphOffFill : Color.clear)
+                        }
+                }
+                .buttonStyle(PressScaleButtonStyle())
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            }
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(ModuleColor.groupFill)
+        )
+        .animation(reduceMotion ? nil : Motion.press, value: selection)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Home")
     }
 }
 

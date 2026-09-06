@@ -32,10 +32,22 @@ private func captureAll(to out: URL) throws {
     try write(name: "home-dark.png", appearance: .darkAqua, to: out) { model, presentation in
         presentation.route = .home
         seedHome(model)
+        model.homeTab = .tools
     }
     try write(name: "home-light.png", appearance: .aqua, to: out) { model, presentation in
         presentation.route = .home
         seedHome(model)
+        model.homeTab = .tools
+    }
+    try write(name: "stats-dark.png", appearance: .darkAqua, to: out) { model, presentation in
+        presentation.route = .home
+        seedHome(model)
+        model.homeTab = .stats
+    }
+    try write(name: "stats-light.png", appearance: .aqua, to: out) { model, presentation in
+        presentation.route = .home
+        seedHome(model)
+        model.homeTab = .stats
     }
     try write(name: "keyboard.png", appearance: .darkAqua, to: out) { model, presentation in
         presentation.route = .keyboard
@@ -223,7 +235,7 @@ private func render<V: View>(_ view: V, appearance: NSAppearance.Name, to url: U
     hosting.setFrameSize(size)
     window.setContentSize(size)
     hosting.layoutSubtreeIfNeeded()
-    // Home has 8 tiles (last stagger 0.7s + 0.3s). This Mac processes go to index 10.
+    // Home has 4 tiles per tab (last stagger 0.3s + 0.3s). This Mac processes go to index 10.
     RunLoop.current.run(until: Date().addingTimeInterval(1.8))
 
     let bounds = hosting.bounds

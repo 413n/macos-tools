@@ -68,6 +68,12 @@ final class AppModel: ObservableObject {
     }
     @Published var visibleHomeTools: [HomeTool]
     @Published var hiddenHomeTools: [HomeTool]
+    @Published var homeTab: HomeTab {
+        didSet {
+            guard homeTab != oldValue else { return }
+            UserDefaults.standard.set(homeTab.rawValue, forKey: Keys.homeTab)
+        }
+    }
 
     let timeoutChoices = [0, 5, 10, 15, 30, 60]
     let awakeDurationChoices = [0, 5, 10, 15, 30, 60, 120, 300]
@@ -99,6 +105,7 @@ final class AppModel: ObservableObject {
         static let menuBarStats = "menuBarStats"
         static let visibleHomeTools = "visibleHomeTools"
         static let hiddenHomeTools = "hiddenHomeTools"
+        static let homeTab = "homeTab"
         static let didLaunch = "didCompleteFirstLaunch"
     }
 
@@ -135,6 +142,20 @@ final class AppModel: ObservableObject {
         let layout = Self.loadHomeLayout(defaults: defaults)
         visibleHomeTools = layout.visible
         hiddenHomeTools = layout.hidden
+        if let raw = defaults.string(forKey: Keys.homeTab),
+           let stored = HomeTab(rawValue: raw) {
+            homeTab = stored
+        } else {
+            homeTab = .tools
+        }
+    }
+
+    var tabVisibleHomeTools: [HomeTool] {
+        visibleHomeTools.filter { $0.tab == homeTab }
+    }
+
+    var tabHiddenHomeTools: [HomeTool] {
+        hiddenHomeTools.filter { $0.tab == homeTab }
     }
 
     func hideHomeTool(_ tool: HomeTool) {
@@ -156,13 +177,26 @@ final class AppModel: ObservableObject {
     }
 
     func moveVisibleHomeTool(_ tool: HomeTool, to destination: Int) {
-        guard let from = visibleHomeTools.firstIndex(of: tool) else { return }
-        let clamped = min(max(destination, 0), visibleHomeTools.count - 1)
+        let tab = tool.tab
+        var subset = visibleHomeTools.filter { $0.tab == tab }
+        guard let from = subset.firstIndex(of: tool) else { return }
+        let clamped = min(max(destination, 0), subset.count - 1)
         guard from != clamped else { return }
-        visibleHomeTools.move(
+        subset.move(
             fromOffsets: IndexSet(integer: from),
             toOffset: clamped > from ? clamped + 1 : clamped
         )
+        var next: [HomeTool] = []
+        var subsetIndex = 0
+        for item in visibleHomeTools {
+            if item.tab == tab {
+                next.append(subset[subsetIndex])
+                subsetIndex += 1
+            } else {
+                next.append(item)
+            }
+        }
+        visibleHomeTools = next
         persistHomeLayout()
     }
 
