@@ -11,7 +11,7 @@ Mimic **macOS Control Center**. Stay on SwiftUI + AppKit. Do not add a third-par
 - Panel background: `.regularMaterial`. Follow system light/dark. Do not force `colorScheme` or `NSAppearance.darkAqua`.
 - Width ~300pt. Padding 14. 2-column grid, 10pt gutters.
 - Home is a **grid of squares**. Each tile: icon in a circle, short name, status. No extra copy.
-- Tap the icon circle → toggle the tool with current options. Tap the rest of the tile → detail. Gear (top right) → Settings. Chevron → home. Closing the popover resets to home.
+- Tap the icon circle → toggle the tool with current options. Tap the rest of the tile → detail. Gear (top right) → Settings. Pencil (left of gear) → edit home (hide, show, drag to reorder). Checkmark → done. Chevron → home. Closing the popover resets to home.
 
 ### Modules
 

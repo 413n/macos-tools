@@ -64,6 +64,8 @@ final class AppModel: ObservableObject {
     @Published var menuBarDisplay: MenuBarDisplay {
         didSet { UserDefaults.standard.set(menuBarDisplay.rawValue, forKey: Keys.menuBarDisplay) }
     }
+    @Published var visibleHomeTools: [HomeTool]
+    @Published var hiddenHomeTools: [HomeTool]
 
     let timeoutChoices = [0, 5, 10, 15, 30, 60]
     let awakeDurationChoices = [0, 5, 10, 15, 30, 60, 120, 300]
@@ -97,6 +99,8 @@ final class AppModel: ObservableObject {
         static let awakeDeadline = "awakeDeadline"
         static let launchAtLogin = "launchAtLogin"
         static let menuBarDisplay = "menuBarDisplay"
+        static let visibleHomeTools = "visibleHomeTools"
+        static let hiddenHomeTools = "hiddenHomeTools"
         static let didLaunch = "didCompleteFirstLaunch"
     }
 
@@ -132,6 +136,67 @@ final class AppModel: ObservableObject {
         } else {
             menuBarDisplay = .logoOnly
         }
+        let layout = Self.loadHomeLayout(defaults: defaults)
+        visibleHomeTools = layout.visible
+        hiddenHomeTools = layout.hidden
+    }
+
+    func hideHomeTool(_ tool: HomeTool) {
+        guard let index = visibleHomeTools.firstIndex(of: tool) else { return }
+        visibleHomeTools.remove(at: index)
+        if !hiddenHomeTools.contains(tool) {
+            hiddenHomeTools.append(tool)
+        }
+        persistHomeLayout()
+    }
+
+    func showHomeTool(_ tool: HomeTool) {
+        guard let index = hiddenHomeTools.firstIndex(of: tool) else { return }
+        hiddenHomeTools.remove(at: index)
+        if !visibleHomeTools.contains(tool) {
+            visibleHomeTools.append(tool)
+        }
+        persistHomeLayout()
+    }
+
+    func moveVisibleHomeTool(_ tool: HomeTool, to destination: Int) {
+        guard let from = visibleHomeTools.firstIndex(of: tool) else { return }
+        let clamped = min(max(destination, 0), visibleHomeTools.count - 1)
+        guard from != clamped else { return }
+        visibleHomeTools.move(
+            fromOffsets: IndexSet(integer: from),
+            toOffset: clamped > from ? clamped + 1 : clamped
+        )
+        persistHomeLayout()
+    }
+
+    private func persistHomeLayout() {
+        UserDefaults.standard.set(visibleHomeTools.map(\.rawValue), forKey: Keys.visibleHomeTools)
+        UserDefaults.standard.set(hiddenHomeTools.map(\.rawValue), forKey: Keys.hiddenHomeTools)
+    }
+
+    private static func loadHomeLayout(defaults: UserDefaults) -> (visible: [HomeTool], hidden: [HomeTool]) {
+        let storedVisible = defaults.stringArray(forKey: Keys.visibleHomeTools)
+        let storedHidden = defaults.stringArray(forKey: Keys.hiddenHomeTools)
+        guard storedVisible != nil || storedHidden != nil else {
+            return (Array(HomeTool.allCases), [])
+        }
+        var visible = uniqued((storedVisible ?? []).compactMap(HomeTool.init(rawValue:)))
+        var hidden = uniqued((storedHidden ?? []).compactMap(HomeTool.init(rawValue:)))
+        hidden.removeAll(where: visible.contains)
+        let known = Set(visible).union(hidden)
+        for tool in HomeTool.allCases where !known.contains(tool) {
+            visible.append(tool)
+        }
+        if visible.isEmpty, hidden.isEmpty {
+            return (Array(HomeTool.allCases), [])
+        }
+        return (visible, hidden)
+    }
+
+    private static func uniqued(_ tools: [HomeTool]) -> [HomeTool] {
+        var seen = Set<HomeTool>()
+        return tools.filter { seen.insert($0).inserted }
     }
 
     var activeMenuBarTools: [MenuBarTool] {

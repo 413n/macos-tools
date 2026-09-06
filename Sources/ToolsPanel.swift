@@ -13,6 +13,7 @@ struct ToolsPanel: View {
                 .transition(.opacity.combined(with: .offset(y: reduceMotion ? 0 : Motion.enterOffset)))
         }
         .animation(reduceMotion ? nil : Motion.enter, value: presentation.route)
+        .animation(reduceMotion ? nil : Motion.enter, value: presentation.isEditingHome)
         .padding(Radius.panelPadding)
         .frame(width: 300)
         .background(.regularMaterial)
@@ -32,12 +33,12 @@ struct ToolsPanel: View {
                 }
             }
 
-            Text(presentation.route.title)
+            Text(presentation.isEditingHome ? "Edit" : presentation.route.title)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
-            if presentation.route == .home {
+            if presentation.route == .home, !presentation.isEditingHome {
                 Text(model.appVersion)
                     .font(.system(size: 11, weight: .regular).monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -45,7 +46,20 @@ struct ToolsPanel: View {
 
             Spacer(minLength: 8)
 
-            if presentation.route != .settings {
+            if presentation.route == .home {
+                if presentation.isEditingHome {
+                    ChromeButton(systemName: "checkmark", label: "Done") {
+                        presentation.isEditingHome = false
+                    }
+                } else {
+                    ChromeButton(systemName: "pencil", label: "Edit Home") {
+                        presentation.isEditingHome = true
+                    }
+                    ChromeButton(systemName: "gearshape", label: "Settings") {
+                        presentation.open(.settings)
+                    }
+                }
+            } else if presentation.route != .settings {
                 ChromeButton(systemName: "gearshape", label: "Settings") {
                     presentation.open(.settings)
                 }
@@ -77,6 +91,14 @@ struct ToolsPanel: View {
 private struct HomeGrid: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var presentation: PanelPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var dragging: HomeTool?
+    @State private var dragTranslation: CGSize = .zero
+    @State private var dragStartFrame: CGRect = .zero
+    @State private var gridWidth: CGFloat = 0
+    @State private var lift = false
+    @State private var settling = false
 
     private let columns = [
         GridItem(.flexible(), spacing: Radius.grid),
@@ -84,65 +106,337 @@ private struct HomeGrid: View {
     ]
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Radius.grid) {
+            if model.visibleHomeTools.isEmpty {
+                if !presentation.isEditingHome {
+                    Text("No tools")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                }
+            } else {
+                tileGrid
+            }
+
+            if presentation.isEditingHome, !model.hiddenHomeTools.isEmpty {
+                Text("Hidden")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 6)
+
+                GroupedPanel {
+                    ForEach(Array(model.hiddenHomeTools.enumerated()), id: \.element.id) { index, tool in
+                        if index > 0 {
+                            Divider()
+                        }
+                        HiddenToolRow(tool: tool) {
+                            withAnimation(reduceMotion ? nil : Motion.enter) {
+                                model.showHomeTool(tool)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .animation(reduceMotion ? nil : Motion.enter, value: model.hiddenHomeTools)
+        .animation(reduceMotion ? nil : Motion.enter, value: presentation.isEditingHome)
+        .onChange(of: presentation.isEditingHome) { _, editing in
+            if !editing {
+                cancelDrag()
+            }
+        }
+    }
+
+    private var tileGrid: some View {
         LazyVGrid(columns: columns, spacing: Radius.grid) {
+            ForEach(Array(model.visibleHomeTools.enumerated()), id: \.element.id) { index, tool in
+                visibleCell(tool)
+                    .stagger(index: index, generation: presentation.generation)
+            }
+        }
+        .coordinateSpace(name: "homeGrid")
+        .contentShape(Rectangle())
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: HomeGridWidthKey.self, value: geo.size.width)
+            }
+        }
+        .onPreferenceChange(HomeGridWidthKey.self) { gridWidth = $0 }
+        .overlay(alignment: .topLeading) {
+            if let dragging {
+                tile(for: dragging)
+                    .frame(width: cellSize, height: cellSize)
+                    .scaleEffect(lift && !reduceMotion ? Motion.hoverScale : 1)
+                    .animation(reduceMotion ? nil : Motion.press, value: lift)
+                    .offset(
+                        x: dragStartFrame.minX + dragTranslation.width,
+                        y: dragStartFrame.minY + dragTranslation.height
+                    )
+                    .animation(settling && !reduceMotion ? Motion.press : nil, value: dragTranslation)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func visibleCell(_ tool: HomeTool) -> some View {
+        ZStack(alignment: .topTrailing) {
+            if dragging == tool {
+                RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
+                    .fill(ModuleColor.offFill)
+                    .aspectRatio(1, contentMode: .fit)
+            } else {
+                tile(for: tool)
+                    .allowsHitTesting(!presentation.isEditingHome)
+            }
+
+            if presentation.isEditingHome {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
+                    .gesture(cellDrag(for: tool))
+                    .help("Drag to reorder")
+            }
+
+            if presentation.isEditingHome, dragging != tool {
+                VisibilityBadge(
+                    symbol: "minus.circle.fill",
+                    tint: .red,
+                    label: "Hide \(tool.title)"
+                ) {
+                    cancelDrag()
+                    withAnimation(reduceMotion ? nil : Motion.enter) {
+                        model.hideHomeTool(tool)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tile(for tool: HomeTool) -> some View {
+        switch tool {
+        case .keyboard:
             ToolTile(
-                title: "Keyboard",
+                title: tool.title,
                 status: model.keyboardLocked ? "On" : "Off",
                 isOn: model.keyboardLocked,
                 isBusy: model.keyboardBusy,
-                outline: "lock",
-                fill: "lock.fill",
-                accent: ModuleColor.keyboard,
-                opticalNudge: CGSize(width: 0.5, height: 0),
-                onToggle: { model.toggleKeyboard() }
-            ) {
-                presentation.open(.keyboard)
-            }
-            .stagger(index: 0, generation: presentation.generation)
-
+                outline: tool.outline,
+                fill: tool.fill,
+                accent: tool.accent,
+                opticalNudge: tool.opticalNudge,
+                onToggle: { model.toggleKeyboard() },
+                action: { presentation.open(.keyboard) }
+            )
+        case .scroll:
             ToolTile(
-                title: "Scroll",
+                title: tool.title,
                 status: model.scrollReverseEnabled ? "On" : "Off",
                 isOn: model.scrollReverseEnabled,
-                outline: "computermouse",
-                fill: "computermouse.fill",
-                accent: ModuleColor.scroll,
-                onToggle: { model.toggleScrollReverse() }
-            ) {
-                presentation.open(.scroll)
-            }
-            .stagger(index: 1, generation: presentation.generation)
-
+                outline: tool.outline,
+                fill: tool.fill,
+                accent: tool.accent,
+                onToggle: { model.toggleScrollReverse() },
+                action: { presentation.open(.scroll) }
+            )
+        case .lid:
             ToolTile(
-                title: "Lid Sleep",
+                title: tool.title,
                 status: model.lidSleepDisabled ? "On" : "Off",
                 isOn: model.lidSleepDisabled,
                 isBusy: model.lidBusy,
-                outline: "moon.zzz",
-                fill: "moon.zzz.fill",
-                accent: ModuleColor.lid,
-                onToggle: { model.toggleLidSleep() }
-            ) {
-                presentation.open(.lid)
-            }
-            .stagger(index: 2, generation: presentation.generation)
-
+                outline: tool.outline,
+                fill: tool.fill,
+                accent: tool.accent,
+                onToggle: { model.toggleLidSleep() },
+                action: { presentation.open(.lid) }
+            )
+        case .awake:
             ToolTile(
-                title: "Awake",
+                title: tool.title,
                 status: model.awakeTileStatus,
                 isOn: model.awakeActive,
-                outline: "cup.and.saucer",
-                fill: "cup.and.saucer.fill",
-                accent: ModuleColor.awake,
-                onToggle: { model.toggleAwake() }
-            ) {
-                presentation.open(.awake)
-            }
-            .stagger(index: 3, generation: presentation.generation)
-
+                outline: tool.outline,
+                fill: tool.fill,
+                accent: tool.accent,
+                onToggle: { model.toggleAwake() },
+                action: { presentation.open(.awake) }
+            )
+        case .machine:
             MacStatsTile()
-                .stagger(index: 4, generation: presentation.generation)
         }
+    }
+
+    private func cellDrag(for tool: HomeTool) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("homeGrid"))
+            .onChanged { value in
+                handleDragChanged(value, tool: tool)
+            }
+            .onEnded { _ in
+                if dragging == tool {
+                    handleDragEnded()
+                }
+            }
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value, tool: HomeTool) {
+        guard presentation.isEditingHome, !settling else { return }
+
+        if dragging == nil {
+            dragging = tool
+            if let index = model.visibleHomeTools.firstIndex(of: tool) {
+                dragStartFrame = slotFrame(index: index)
+            }
+            var snap = Transaction()
+            snap.disablesAnimations = true
+            withTransaction(snap) {
+                dragTranslation = value.translation
+            }
+            withAnimation(reduceMotion ? nil : Motion.press) {
+                lift = true
+            }
+            return
+        }
+
+        guard dragging == tool else { return }
+
+        var follow = Transaction()
+        follow.disablesAnimations = true
+        withTransaction(follow) {
+            dragTranslation = value.translation
+        }
+        guard let current = model.visibleHomeTools.firstIndex(of: tool) else { return }
+        let center = CGPoint(
+            x: dragStartFrame.midX + value.translation.width,
+            y: dragStartFrame.midY + value.translation.height
+        )
+        let target = slotIndex(at: center, current: current)
+        guard current != target else { return }
+        withAnimation(reduceMotion ? nil : Motion.press) {
+            model.moveVisibleHomeTool(tool, to: target)
+        }
+    }
+
+    private func handleDragEnded() {
+        guard let tool = dragging else { return }
+        settling = true
+        let destination: CGRect = {
+            if let index = model.visibleHomeTools.firstIndex(of: tool) {
+                return slotFrame(index: index)
+            }
+            return dragStartFrame
+        }()
+        let translation = CGSize(
+            width: destination.minX - dragStartFrame.minX,
+            height: destination.minY - dragStartFrame.minY
+        )
+        withAnimation(reduceMotion ? nil : Motion.press) {
+            dragTranslation = translation
+            lift = false
+        } completion: {
+            cancelDrag()
+        }
+    }
+
+    private func cancelDrag() {
+        dragging = nil
+        dragTranslation = .zero
+        dragStartFrame = .zero
+        lift = false
+        settling = false
+    }
+
+    private var cellSize: CGFloat {
+        let width = gridWidth > 0 ? gridWidth : 272
+        return (width - Radius.grid) / 2
+    }
+
+    private func slotFrame(index: Int) -> CGRect {
+        let cell = cellSize
+        let gap = Radius.grid
+        let col = CGFloat(index % 2)
+        let row = CGFloat(index / 2)
+        return CGRect(
+            x: col * (cell + gap),
+            y: row * (cell + gap),
+            width: cell,
+            height: cell
+        )
+    }
+
+    private func slotIndex(at point: CGPoint, current: Int) -> Int {
+        let count = model.visibleHomeTools.count
+        guard count > 0 else { return 0 }
+        let cell = cellSize
+        let gap = Radius.grid
+        let stride = cell + gap
+        guard stride > 0 else { return 0 }
+        let col = point.x < cell + gap / 2 ? 0 : 1
+        let row = Int(floor(max(0, point.y) / stride))
+        let proposed = min(count - 1, max(0, row * 2 + col))
+        if proposed == current { return current }
+        let inset = cell * 0.2
+        guard slotFrame(index: proposed).insetBy(dx: inset, dy: inset).contains(point) else {
+            return current
+        }
+        return proposed
+    }
+}
+
+private struct HomeGridWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct VisibilityBadge: View {
+    let symbol: String
+    let tint: Color
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, tint)
+                .font(.system(size: 16, weight: .semibold))
+                .padding(6)
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .accessibilityLabel(label)
+    }
+}
+
+private struct HiddenToolRow: View {
+    let tool: HomeTool
+    let onShow: () -> Void
+
+    var body: some View {
+        Button(action: onShow) {
+            HStack(spacing: 10) {
+                Image(systemName: tool.outline)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: Radius.chrome, height: Radius.chrome)
+                    .background(ModuleColor.offFill, in: Circle())
+                    .accessibilityHidden(true)
+                Text(tool.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "plus.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color.green)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .accessibilityLabel("Show \(tool.title)")
     }
 }
 

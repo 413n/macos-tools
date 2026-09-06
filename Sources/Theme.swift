@@ -4,6 +4,7 @@ import SwiftUI
 final class PanelPresentation: ObservableObject {
     @Published var generation = 0
     @Published var route: PanelRoute = .home
+    @Published var isEditingHome = false
 
     func menuDidOpen() {
         generation += 1
@@ -11,15 +12,18 @@ final class PanelPresentation: ObservableObject {
 
     func menuDidClose() {
         route = .home
+        isEditingHome = false
         generation = 0
     }
 
     func open(_ route: PanelRoute) {
+        isEditingHome = false
         self.route = route
         generation += 1
     }
 
     func back() {
+        isEditingHome = false
         route = .home
         generation += 1
     }
@@ -43,6 +47,73 @@ enum PanelRoute: Equatable {
         case .awake: "Awake"
         case .machine: "This Mac"
         case .settings: "Settings"
+        }
+    }
+}
+
+enum HomeTool: String, CaseIterable, Identifiable {
+    case keyboard
+    case scroll
+    case lid
+    case awake
+    case machine
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .keyboard: "Keyboard"
+        case .scroll: "Scroll"
+        case .lid: "Lid Sleep"
+        case .awake: "Awake"
+        case .machine: "This Mac"
+        }
+    }
+
+    var outline: String {
+        switch self {
+        case .keyboard: "lock"
+        case .scroll: "computermouse"
+        case .lid: "moon.zzz"
+        case .awake: "cup.and.saucer"
+        case .machine: "cpu"
+        }
+    }
+
+    var fill: String {
+        switch self {
+        case .keyboard: "lock.fill"
+        case .scroll: "computermouse.fill"
+        case .lid: "moon.zzz.fill"
+        case .awake: "cup.and.saucer.fill"
+        case .machine: "cpu.fill"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .keyboard: ModuleColor.keyboard
+        case .scroll: ModuleColor.scroll
+        case .lid: ModuleColor.lid
+        case .awake: ModuleColor.awake
+        case .machine: ModuleColor.machine
+        }
+    }
+
+    var opticalNudge: CGSize {
+        switch self {
+        case .keyboard: CGSize(width: 0.5, height: 0)
+        default: .zero
+        }
+    }
+
+    var route: PanelRoute {
+        switch self {
+        case .keyboard: .keyboard
+        case .scroll: .scroll
+        case .lid: .lid
+        case .awake: .awake
+        case .machine: .machine
         }
     }
 }
