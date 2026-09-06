@@ -38,7 +38,7 @@ final class AppModel: ObservableObject {
             ToolStateStore.shared.update { $0.awakeMinutes = awakeMinutes }
             if suppressAwakeRestart { return }
             if awakeActive {
-                startAwake(timeoutSeconds: Self.timeoutSeconds(for: awakeMinutes))
+                startAwake()
             }
         }
     }
@@ -78,13 +78,11 @@ final class AppModel: ObservableObject {
     let timeoutChoices = [0, 5, 10, 15, 30, 60]
     let awakeDurationChoices = [0, 5, 10, 15, 30, 60, 120, 300]
 
-    private let keyboard = KeyboardLockService()
+    private let tools = ToolRegistry.shared
     private let keyboardQueue = DispatchQueue(label: "naf.tools.keyboard", qos: .userInitiated)
     private var keyboardEpoch = 0
-    private let lid = LidSleepService()
     private let lidQueue = DispatchQueue(label: "naf.tools.lid", qos: .userInitiated)
     private var lidEpoch = 0
-    private let caffeinate = CaffeinateService()
     private var awakeTick: Timer?
     private let devices = DeviceMonitor()
     private let statsService = SystemStatsService()
@@ -95,7 +93,6 @@ final class AppModel: ObservableObject {
     private var latestReleaseURL: URL?
     private var stateObserver: NSObjectProtocol?
     private var suppressAwakeRestart = false
-    private var applyingExternalState = false
 
     private var panelWantsStats = false
 
@@ -229,8 +226,8 @@ final class AppModel: ObservableObject {
         return tools.filter { seen.insert($0).inserted }
     }
 
-    var activeMenuBarTools: [MenuBarTool] {
-        var tools: [MenuBarTool] = []
+    var activeMenuBarTools: [ToolID] {
+        var tools: [ToolID] = []
         if keyboardLocked { tools.append(.keyboard) }
         if scrollReverseEnabled { tools.append(.scroll) }
         if lidSleepDisabled { tools.append(.lid) }
@@ -364,9 +361,8 @@ final class AppModel: ObservableObject {
 
     func start() {
         refreshAccessibility()
-        keyboard.onTimerExpired = { [weak self] in
+        tools.keyboard.onTimerExpired = { [weak self] in
             DispatchQueue.main.async {
-                self?.persistKeyboardLocked(false)
                 self?.refreshKeyboardStatus()
             }
         }
@@ -497,9 +493,13 @@ final class AppModel: ObservableObject {
     func setScrollReverseEnabled(_ enabled: Bool) {
         guard enabled != scrollReverseEnabled else { return }
         scrollReverseEnabled = enabled
-        ToolStateStore.shared.update { $0.scrollReverseEnabled = enabled }
-        refreshScrollReverseState()
-        ToolStateStore.shared.notifyChange()
+        do {
+            try tools.scroll.setEnabled(enabled, mice: mice)
+        } catch {
+            // Store is on; helper may still be down — surface that in scrollStatus.
+        }
+        accessibilityTrusted = AccessibilityAuth.hasPermission || ScrollHelperController.shared.isRunning
+        updateScrollStatus()
     }
 
     func unlockKeyboard() {
@@ -510,49 +510,38 @@ final class AppModel: ObservableObject {
         guard !keyboardBusy, locked != keyboardLocked else { return }
         keyboardError = nil
         keyboardLocked = locked
-        persistKeyboardLocked(locked)
-        ToolStateStore.shared.notifyChange()
         keyboardBusy = true
         keyboardStatus = locked ? "Locking built-in keyboard…" : "Unlocking built-in keyboard…"
         keyboardEpoch += 1
         let epoch = keyboardEpoch
-        let timeout = autoUnlockMinutes == 0 ? nil : autoUnlockMinutes
-        let dim = dimKeyboardWhenLocked
         keyboardQueue.async { [weak self] in
             guard let self else { return }
             do {
-                if locked {
-                    try self.keyboard.disable(timeoutMinutes: timeout)
-                } else {
-                    try self.keyboard.enable()
-                }
-                let snapshot = try self.keyboard.snapshot()
-                self.keyboard.syncBacklight(locked: snapshot.locked, dimWhileLocked: dim)
+                try self.tools.keyboard.setEnabled(locked, options: ToolOptions())
+                let snapshot = try self.tools.keyboard.hardwareSnapshot()
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch else { return }
                     self.keyboardBusy = false
-                    self.applyKeyboardSnapshot(snapshot, persist: true)
+                    self.applyKeyboardSnapshot(snapshot)
                 }
             } catch {
-                let snapshot = try? self.keyboard.snapshot()
+                let snapshot = try? self.tools.keyboard.hardwareSnapshot()
                 if let snapshot {
-                    self.keyboard.syncBacklight(locked: snapshot.locked, dimWhileLocked: dim)
+                    self.tools.keyboard.syncBacklight(locked: snapshot.locked)
                 }
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch else { return }
                     self.keyboardBusy = false
                     if let snapshot {
                         self.applyKeyboardSnapshot(snapshot, persist: true)
-                        // hidutil can apply the mapping and still look like it
-                        // failed (e.g. a killed process). Trust the hardware.
                         if snapshot.locked != locked {
                             self.keyboardError = error.localizedDescription
                         }
                     } else {
-                        self.keyboard.invalidateIDs()
+                        self.tools.keyboard.invalidateIDs()
                         self.keyboardError = error.localizedDescription
                         self.keyboardLocked = false
-                        self.persistKeyboardLocked(false)
+                        self.tools.keyboard.persistLocked(false)
                         self.keyboardStatus = error.localizedDescription
                     }
                 }
@@ -562,18 +551,17 @@ final class AppModel: ObservableObject {
 
     func refreshKeyboardStatus(alignBacklight: Bool = false) {
         let epoch = keyboardEpoch
-        let dim = dimKeyboardWhenLocked
         keyboardQueue.async { [weak self] in
             guard let self else { return }
             do {
-                let snapshot = try self.keyboard.snapshot()
+                let snapshot = try self.tools.keyboard.hardwareSnapshot()
                 if snapshot.locked {
-                    self.keyboard.resumeUITimerIfNeeded()
-                    if alignBacklight, dim {
-                        self.keyboard.syncBacklight(locked: true, dimWhileLocked: true)
+                    self.tools.keyboard.resumeUITimerIfNeeded()
+                    if alignBacklight {
+                        self.tools.keyboard.syncBacklight(locked: true)
                     }
                 } else {
-                    self.keyboard.restoreBacklightIfNeeded()
+                    self.tools.keyboard.restoreBacklightIfNeeded()
                 }
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch, !self.keyboardBusy else { return }
@@ -597,16 +585,15 @@ final class AppModel: ObservableObject {
 
     private func syncBacklightWithLock() {
         guard keyboardLocked, !keyboardBusy else { return }
-        let dim = dimKeyboardWhenLocked
         keyboardQueue.async { [weak self] in
-            self?.keyboard.syncBacklight(locked: true, dimWhileLocked: dim)
+            self?.tools.keyboard.syncBacklight(locked: true)
         }
     }
 
     private func applyKeyboardSnapshot(_ snapshot: KeyboardLockService.Snapshot, persist: Bool = false) {
         keyboardLocked = snapshot.locked
         if persist {
-            persistKeyboardLocked(snapshot.locked)
+            tools.keyboard.persistLocked(snapshot.locked)
         }
         if snapshot.locked {
             if let remaining = snapshot.remainingMinutes {
@@ -623,10 +610,6 @@ final class AppModel: ObservableObject {
         guard !lidBusy, disabled != lidSleepDisabled else { return }
         lidError = nil
         lidSleepDisabled = disabled
-        persistLidSleepDisabled(disabled)
-        if !applyingExternalState {
-            ToolStateStore.shared.notifyChange()
-        }
         lidBusy = true
         lidStatus = disabled ? "Keeping the Mac awake…" : "Restoring lid sleep…"
         lidEpoch += 1
@@ -634,17 +617,15 @@ final class AppModel: ObservableObject {
         lidQueue.async { [weak self] in
             guard let self else { return }
             do {
-                try self.runLidChangeOnMain {
-                    try self.lid.setDisabled(disabled)
-                }
-                let snapshot = self.lid.snapshot()
+                try self.tools.lid.setEnabled(disabled, options: ToolOptions())
+                let snapshot = self.tools.lid.hardwareSnapshot()
                 DispatchQueue.main.async {
                     guard epoch == self.lidEpoch else { return }
                     self.lidBusy = false
                     self.applyLidSnapshot(snapshot)
                 }
             } catch {
-                let snapshot = self.lid.snapshot()
+                let snapshot = self.tools.lid.hardwareSnapshot()
                 DispatchQueue.main.async {
                     guard epoch == self.lidEpoch else { return }
                     self.lidBusy = false
@@ -659,7 +640,8 @@ final class AppModel: ObservableObject {
         let epoch = lidEpoch
         lidQueue.async { [weak self] in
             guard let self else { return }
-            let snapshot = self.lid.snapshot()
+            self.tools.lid.restore()
+            let snapshot = self.tools.lid.hardwareSnapshot()
             DispatchQueue.main.async {
                 guard epoch == self.lidEpoch, !self.lidBusy else { return }
                 self.applyLidSnapshot(snapshot)
@@ -669,28 +651,11 @@ final class AppModel: ObservableObject {
 
     private func applyLidSnapshot(_ snapshot: LidSleepService.Snapshot) {
         lidSleepDisabled = snapshot.disabled
-        persistLidSleepDisabled(snapshot.disabled)
         if snapshot.disabled {
             lidStatus = "Battery stays awake with the lid closed"
         } else {
             lidStatus = "Battery sleeps when the lid closes"
         }
-    }
-
-    private func runLidChangeOnMain(_ body: @escaping () throws -> Void) throws {
-        if Thread.isMainThread {
-            try body()
-            return
-        }
-        var caught: Error?
-        DispatchQueue.main.sync {
-            do {
-                try body()
-            } catch {
-                caught = error
-            }
-        }
-        if let caught { throw caught }
     }
 
     func openAccessibilitySettings() {
@@ -714,11 +679,9 @@ final class AppModel: ObservableObject {
 
     func setScrollReverse(for id: String, enabled: Bool) {
         scrollReverseByDevice[id] = enabled
-        persistMousePrefs()
-        refreshScrollReverseState()
-        if !applyingExternalState {
-            ToolStateStore.shared.notifyChange()
-        }
+        tools.scroll.setDevice(id: id, enabled: enabled, mice: mice)
+        accessibilityTrusted = AccessibilityAuth.hasPermission || ScrollHelperController.shared.isRunning
+        updateScrollStatus()
     }
 
     func scrollReverseBinding(for id: String) -> Binding<Bool> {
@@ -729,24 +692,15 @@ final class AppModel: ObservableObject {
     }
 
     private func seedMouseDefaults() {
-        var changed = false
-        for mouse in mice where scrollReverseByDevice[mouse.id] == nil {
-            scrollReverseByDevice[mouse.id] = true
-            changed = true
+        if tools.scroll.seedMouseDefaults(mice) {
+            scrollReverseByDevice = ToolStateStore.shared.current.scrollReverseByDevice
         }
-        if changed {
-            persistMousePrefs()
-        }
-    }
-
-    private func persistMousePrefs() {
-        ToolStateStore.shared.update { $0.scrollReverseByDevice = scrollReverseByDevice }
     }
 
     private func refreshScrollReverseState() {
-        let enabledIDs = Set(mice.filter { isScrollReverseOn(for: $0.id) }.map(\.id))
-        DeviceMonitor.reverseEnabledIDs = scrollReverseEnabled ? enabledIDs : []
-        applyScrollReverse()
+        tools.scroll.apply(mice: mice)
+        accessibilityTrusted = AccessibilityAuth.hasPermission || ScrollHelperController.shared.isRunning
+        updateScrollStatus()
     }
 
     private func handleWake() {
@@ -758,7 +712,7 @@ final class AppModel: ObservableObject {
                 self.reapplyKeyboardLock()
             } else {
                 self.keyboardQueue.async {
-                    self.keyboard.invalidateIDs()
+                    self.tools.keyboard.invalidateIDs()
                     DispatchQueue.main.async {
                         self.refreshKeyboardStatus(alignBacklight: true)
                     }
@@ -832,41 +786,21 @@ final class AppModel: ObservableObject {
     }
 
     private func restoreKeyboardIfNeeded() {
-        let state = ToolStateStore.shared.current
-        let wantedLock = state.keyboardLocked
-        let savedBoot = state.keyboardLockBoot
-        guard wantedLock && Self.isCurrentBoot(savedBoot) else {
-            if wantedLock {
-                persistKeyboardLocked(false)
-            }
-            refreshKeyboardStatus(alignBacklight: true)
-            return
-        }
         let epoch = keyboardEpoch
-        let dim = dimKeyboardWhenLocked
         keyboardQueue.async { [weak self] in
             guard let self else { return }
+            self.tools.keyboard.restore()
             do {
-                let snapshot = try self.keyboard.snapshot()
-                if snapshot.locked {
-                    self.keyboard.resumeUITimerIfNeeded()
-                    if dim {
-                        self.keyboard.syncBacklight(locked: true, dimWhileLocked: true)
-                    }
-                    DispatchQueue.main.async {
-                        guard epoch == self.keyboardEpoch, !self.keyboardBusy else { return }
-                        self.applyKeyboardSnapshot(snapshot)
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        guard epoch == self.keyboardEpoch, !self.keyboardBusy else { return }
-                        self.reapplyKeyboardLock()
-                    }
+                let snapshot = try self.tools.keyboard.hardwareSnapshot()
+                DispatchQueue.main.async {
+                    guard epoch == self.keyboardEpoch, !self.keyboardBusy else { return }
+                    self.applyKeyboardSnapshot(snapshot)
                 }
             } catch {
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch, !self.keyboardBusy else { return }
-                    self.reapplyKeyboardLock()
+                    self.keyboardLocked = false
+                    self.keyboardStatus = error.localizedDescription
                 }
             }
         }
@@ -878,25 +812,18 @@ final class AppModel: ObservableObject {
         keyboardStatus = "Re-applying keyboard lock…"
         keyboardEpoch += 1
         let epoch = keyboardEpoch
-        let dim = dimKeyboardWhenLocked
         keyboardQueue.async { [weak self] in
             guard let self else { return }
-            self.keyboard.invalidateIDs()
             do {
-                try self.keyboard.disable(timeoutMinutes: nil, preserveExistingTimer: true)
-                self.keyboard.resumeUITimerIfNeeded()
-                let snapshot = try self.keyboard.snapshot()
-                self.keyboard.syncBacklight(locked: snapshot.locked, dimWhileLocked: dim)
+                try self.tools.keyboard.reapplyLock()
+                let snapshot = try self.tools.keyboard.hardwareSnapshot()
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch else { return }
                     self.keyboardBusy = false
-                    self.applyKeyboardSnapshot(snapshot, persist: true)
+                    self.applyKeyboardSnapshot(snapshot)
                 }
             } catch {
-                let snapshot = try? self.keyboard.snapshot()
-                if let snapshot {
-                    self.keyboard.syncBacklight(locked: snapshot.locked, dimWhileLocked: dim)
-                }
+                let snapshot = try? self.tools.keyboard.hardwareSnapshot()
                 DispatchQueue.main.async {
                     guard epoch == self.keyboardEpoch else { return }
                     self.keyboardBusy = false
@@ -911,103 +838,60 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func persistKeyboardLocked(_ locked: Bool) {
-        ToolStateStore.shared.update {
-            $0.keyboardLocked = locked
-            if locked {
-                $0.keyboardLockBoot = Self.currentBootTime()
-            }
-        }
-    }
-
-    private func persistLidSleepDisabled(_ disabled: Bool) {
-        ToolStateStore.shared.update { $0.lidSleepDisabled = disabled }
-    }
-
     func setAwakeActive(_ active: Bool) {
         awakeError = nil
         if active {
-            if awakeActive, caffeinate.snapshot().active { return }
-            startAwake(timeoutSeconds: Self.timeoutSeconds(for: awakeMinutes))
+            if awakeActive, tools.awake.hardwareSnapshot().active { return }
+            startAwake()
         } else {
-            if !awakeActive, !caffeinate.snapshot().active { return }
-            stopAwake(persist: true)
+            if !awakeActive, !tools.awake.hardwareSnapshot().active { return }
+            stopAwake()
         }
     }
 
-    private func startAwake(timeoutSeconds: Int?) {
+    private func startAwake() {
         awakeError = nil
         do {
-            try caffeinate.start(timeoutSeconds: timeoutSeconds)
+            try tools.awake.setEnabled(true, options: ToolOptions(minutes: awakeMinutes))
         } catch {
             stopAwakeTick()
             awakeActive = false
             awakeRemainingSeconds = nil
-            persistAwakeEnabled(false)
             awakeError = error.localizedDescription
             awakeStatus = error.localizedDescription
             return
         }
-        awakeActive = true
-        persistAwakeEnabled(true)
-        applyAwakeSnapshot(caffeinate.snapshot())
+        applyAwakeSnapshot(tools.awake.hardwareSnapshot())
         startAwakeTick()
-        if !applyingExternalState {
-            ToolStateStore.shared.notifyChange()
-        }
     }
 
-    private func stopAwake(persist: Bool) {
+    private func stopAwake() {
         stopAwakeTick()
-        caffeinate.stop()
+        try? tools.awake.setEnabled(false, options: ToolOptions())
         awakeActive = false
         awakeRemainingSeconds = nil
-        if persist {
-            persistAwakeEnabled(false)
-        }
         awakeStatus = "Mac can sleep as usual"
-        if persist, !applyingExternalState {
-            ToolStateStore.shared.notifyChange()
-        }
     }
 
     private func handleAwakeExpired() {
         stopAwakeTick()
+        tools.awake.noteExpired()
         awakeActive = false
         awakeRemainingSeconds = nil
-        persistAwakeEnabled(false)
         awakeStatus = "Mac can sleep as usual"
     }
 
     private func restoreAwakeIfNeeded() {
-        let state = ToolStateStore.shared.current
-        guard state.awakeEnabled else {
-            if awakeActive && !caffeinate.snapshot().active {
-                stopAwakeTick()
-                awakeActive = false
-                awakeRemainingSeconds = nil
-                awakeStatus = "Mac can sleep as usual"
-            } else if caffeinate.snapshot().active {
-                applyAwakeSnapshot(caffeinate.snapshot())
-                startAwakeTick()
-            }
-            return
-        }
-        if caffeinate.snapshot().active {
-            applyAwakeSnapshot(caffeinate.snapshot())
+        tools.awake.restore()
+        let snapshot = tools.awake.hardwareSnapshot()
+        if snapshot.active {
+            applyAwakeSnapshot(snapshot)
             startAwakeTick()
-            return
-        }
-        if awakeMinutes == 0 {
-            startAwake(timeoutSeconds: nil)
-            return
-        }
-        let deadline = state.awakeDeadline ?? 0
-        let remaining = Int((deadline - Date().timeIntervalSince1970).rounded(.down))
-        if remaining > 1 {
-            startAwake(timeoutSeconds: remaining)
-        } else {
-            stopAwake(persist: true)
+        } else if awakeActive {
+            stopAwakeTick()
+            awakeActive = false
+            awakeRemainingSeconds = nil
+            awakeStatus = "Mac can sleep as usual"
         }
     }
 
@@ -1041,25 +925,12 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshAwakeRemaining() {
-        let snapshot = caffeinate.snapshot()
+        let snapshot = tools.awake.hardwareSnapshot()
         if snapshot.active {
             applyAwakeSnapshot(snapshot)
         } else if awakeActive {
             handleAwakeExpired()
         }
-    }
-
-    private func persistAwakeEnabled(_ enabled: Bool) {
-        ToolStateStore.shared.update {
-            $0.awakeEnabled = enabled
-            if !enabled {
-                $0.awakeDeadline = nil
-            }
-        }
-    }
-
-    private static func timeoutSeconds(for minutes: Int) -> Int? {
-        minutes > 0 ? minutes * 60 : nil
     }
 
     private static func formatAwakeRemaining(_ seconds: Int, compact: Bool) -> String {
@@ -1099,25 +970,10 @@ final class AppModel: ObservableObject {
         let changed = trusted != accessibilityTrusted
         accessibilityTrusted = trusted
         if changed {
-            applyScrollReverse()
+            refreshScrollReverseState()
         } else {
             updateScrollStatus()
         }
-    }
-
-    private func applyScrollReverse() {
-        let shouldRun = scrollReverseEnabled && mice.contains { isScrollReverseOn(for: $0.id) }
-        if shouldRun {
-            if ScrollHelperController.shared.start() {
-                accessibilityTrusted = true
-            } else {
-                accessibilityTrusted = AccessibilityAuth.hasPermission
-                ScrollHelperController.shared.stop()
-            }
-        } else {
-            ScrollHelperController.shared.stop()
-        }
-        updateScrollStatus()
     }
 
     private func updateScrollStatus() {
@@ -1145,7 +1001,6 @@ final class AppModel: ObservableObject {
     private func handleExternalStateChange() {
         ToolStateStore.shared.reload()
         let state = ToolStateStore.shared.current
-        applyingExternalState = true
         suppressAwakeRestart = true
         autoUnlockMinutes = state.autoUnlockMinutes
         dimKeyboardWhenLocked = state.dimKeyboardWhenLocked
@@ -1155,7 +1010,6 @@ final class AppModel: ObservableObject {
             ? state.awakeMinutes
             : awakeMinutes
         suppressAwakeRestart = false
-        applyingExternalState = false
         refreshKeyboardStatus(alignBacklight: true)
         refreshLidStatus()
         restoreAwakeIfNeeded()

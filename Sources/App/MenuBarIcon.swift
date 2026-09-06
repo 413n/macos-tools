@@ -35,38 +35,6 @@ enum MenuBarStats: String, CaseIterable, Identifiable {
     }
 }
 
-enum MenuBarTool: String, CaseIterable {
-    case keyboard
-    case scroll
-    case lid
-    case awake
-
-    var title: String {
-        switch self {
-        case .keyboard: "Keyboard"
-        case .scroll: "Scroll"
-        case .lid: "Lid Sleep"
-        case .awake: "Awake"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .keyboard: "lock.fill"
-        case .scroll: "computermouse.fill"
-        case .lid: "moon.zzz.fill"
-        case .awake: "cup.and.saucer.fill"
-        }
-    }
-
-    var opticalNudge: CGSize {
-        switch self {
-        case .keyboard: CGSize(width: 0.5, height: 0)
-        default: .zero
-        }
-    }
-}
-
 /// Menu-bar template of the Narciso N mark, optionally followed by active-tool symbols.
 ///
 /// A PDF representation stays sharp after display scale changes (unplugging a
@@ -79,7 +47,7 @@ enum MenuBarIcon {
     private static let logoToGridGap: CGFloat = 4
     private static let symbolPointSize: CGFloat = 8
 
-    static func makeImage(mode: MenuBarDisplay, tools: [MenuBarTool], statsText: String? = nil) -> NSImage {
+    static func makeImage(mode: MenuBarDisplay, tools: [ToolID], statsText: String? = nil) -> NSImage {
         let stats = statsText.flatMap { $0.isEmpty ? nil : $0 }
         if stats == nil {
             switch mode {
@@ -105,7 +73,7 @@ enum MenuBarIcon {
         }
     }
 
-    static func statusItemLength(mode: MenuBarDisplay, tools: [MenuBarTool], statsText: String? = nil) -> CGFloat {
+    static func statusItemLength(mode: MenuBarDisplay, tools: [ToolID], statsText: String? = nil) -> CGFloat {
         let stats = statsText.flatMap { $0.isEmpty ? nil : $0 }
         if stats == nil, mode == .logoOnly || tools.isEmpty {
             return NSStatusItem.squareLength
@@ -113,7 +81,7 @@ enum MenuBarIcon {
         return NSStatusItem.variableLength
     }
 
-    static func tooltip(tools: [MenuBarTool], statsText: String? = nil) -> String {
+    static func tooltip(tools: [ToolID], statsText: String? = nil) -> String {
         var parts = ["NAF Tools"]
         if let statsText, !statsText.isEmpty {
             parts.append(statsText)
@@ -154,7 +122,7 @@ enum MenuBarIcon {
         return NSSize(width: ceil(size.width), height: pointSize.height)
     }
 
-    private static func makeCompositeImage(showLogo: Bool, tools: [MenuBarTool], statsText: String? = nil) -> NSImage {
+    private static func makeCompositeImage(showLogo: Bool, tools: [ToolID], statsText: String? = nil) -> NSImage {
         let grid = tools.isEmpty ? NSSize.zero : gridSize(toolCount: tools.count)
         let stats = statsText.map(statsSize) ?? .zero
         var width: CGFloat = 0
@@ -208,10 +176,10 @@ enum MenuBarIcon {
         return image
     }
 
-    private static func drawSymbol(_ tool: MenuBarTool, in rect: CGRect) {
+    private static func drawSymbol(_ tool: ToolID, in rect: CGRect) {
         let config = NSImage.SymbolConfiguration(pointSize: symbolPointSize, weight: .semibold)
             .applying(NSImage.SymbolConfiguration(paletteColors: [.black]))
-        guard let symbol = NSImage(systemSymbolName: tool.systemImage, accessibilityDescription: nil)?
+        guard let symbol = NSImage(systemSymbolName: tool.fill, accessibilityDescription: nil)?
             .withSymbolConfiguration(config)
         else { return }
         let size = symbol.size

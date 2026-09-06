@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 
 enum CLICommands {
@@ -15,123 +14,56 @@ enum CLICommands {
     }
 
     static func keyboard(_ action: CLISwitch, json: Bool) throws {
-        let service = KeyboardLockService()
-        switch action {
-        case .status:
-            break
-        case .on(let minutes, let dim):
-            ToolStateStore.shared.update { state in
-                if let minutes { state.autoUnlockMinutes = minutes }
-                if let dim { state.dimKeyboardWhenLocked = dim }
-            }
-            let timeout = ToolStateStore.shared.current.autoUnlockMinutes
-            do {
-                try service.disable(timeoutMinutes: timeout > 0 ? timeout : nil)
-            } catch {
-                throw CLIError.failed(error.localizedDescription)
-            }
-            let lockedDim = ToolStateStore.shared.current.dimKeyboardWhenLocked
-            service.syncBacklight(locked: true, dimWhileLocked: lockedDim)
-            persistKeyboardLocked(true)
-            ToolStateStore.shared.notifyChange()
-        case .off:
-            do {
-                try service.enable()
-            } catch {
-                throw CLIError.failed(error.localizedDescription)
-            }
-            service.syncBacklight(locked: false, dimWhileLocked: false)
-            persistKeyboardLocked(false)
-            ToolStateStore.shared.notifyChange()
-        }
+        try run(.keyboard, action)
         emit(StatusBuilder.make(includeMac: false), json: json, focus: .keyboard)
     }
 
     static func scroll(_ action: CLISwitch, json: Bool) throws {
-        switch action {
-        case .status:
-            break
-        case .on:
-            if !AccessibilityAuth.hasPermission {
-                AccessibilityAuth.requestIfNeeded()
-            }
-            let mice = DeviceMonitor.listMiceOnce()
-            ToolStateStore.shared.update { state in
-                state.scrollReverseEnabled = true
-                for mouse in mice where state.scrollReverseByDevice[mouse.id] == nil {
-                    state.scrollReverseByDevice[mouse.id] = true
-                }
-            }
-            let shouldRun = mice.contains {
-                ToolStateStore.shared.current.scrollReverseByDevice[$0.id] ?? true
-            }
-            if shouldRun {
-                guard ScrollHelperController.shared.start() else {
-                    if !AccessibilityAuth.hasPermission {
-                        throw CLIError.permission(
-                            "Scroll reverse needs Accessibility permission (System Settings → Privacy & Security → Accessibility)."
-                        )
-                    }
-                    throw CLIError.failed("Could not start scroll reverse.")
-                }
-            }
-            ToolStateStore.shared.notifyChange()
-        case .off:
-            ToolStateStore.shared.update { $0.scrollReverseEnabled = false }
-            ScrollHelperController.shared.stop()
-            ToolStateStore.shared.notifyChange()
-        }
+        try run(.scroll, action)
         emit(StatusBuilder.make(includeMac: false), json: json, focus: .scroll)
     }
 
     static func lid(_ action: CLISwitch, json: Bool) throws {
-        let service = LidSleepService()
-        switch action {
-        case .status:
-            break
-        case .on:
-            do {
-                try service.setDisabled(true)
-            } catch {
-                throw lidError(error)
-            }
-            ToolStateStore.shared.update { $0.lidSleepDisabled = true }
-            ToolStateStore.shared.notifyChange()
-        case .off:
-            do {
-                try service.setDisabled(false)
-            } catch {
-                throw lidError(error)
-            }
-            ToolStateStore.shared.update { $0.lidSleepDisabled = false }
-            ToolStateStore.shared.notifyChange()
-        }
+        try run(.lid, action)
         emit(StatusBuilder.make(includeMac: false), json: json, focus: .lid)
     }
 
     static func awake(_ action: CLISwitch, json: Bool) throws {
-        let service = CaffeinateService()
+        try run(.awake, action)
+        emit(StatusBuilder.make(includeMac: false), json: json, focus: .awake)
+    }
+
+    private static func run(_ id: ToolID, _ action: CLISwitch) throws {
+        let tool = ToolRegistry.shared.toggle(id)
         switch action {
         case .status:
-            break
-        case .on(let minutes, _):
-            let chosen = minutes ?? 0
-            do {
-                try service.start(timeoutSeconds: chosen > 0 ? chosen * 60 : nil)
-            } catch {
-                throw CLIError.failed(error.localizedDescription)
+            return
+        case .on(let minutes, let dim):
+            let options: ToolOptions
+            if id == .awake {
+                options = ToolOptions(minutes: minutes ?? 0)
+            } else {
+                options = ToolOptions(minutes: minutes, dim: dim)
             }
-            ToolStateStore.shared.update {
-                $0.awakeEnabled = true
-                $0.awakeMinutes = chosen
-            }
-            ToolStateStore.shared.notifyChange()
+            try mapError { try tool.setEnabled(true, options: options) }
         case .off:
-            service.stop()
-            ToolStateStore.shared.update { $0.awakeEnabled = false }
-            ToolStateStore.shared.notifyChange()
+            try mapError { try tool.setEnabled(false, options: ToolOptions()) }
         }
-        emit(StatusBuilder.make(includeMac: false), json: json, focus: .awake)
+    }
+
+    private static func mapError(_ body: () throws -> Void) throws {
+        do {
+            try body()
+        } catch let error as ToolError {
+            switch error {
+            case .permission(let message):
+                throw CLIError.permission(message)
+            case .failed(let message):
+                throw CLIError.failed(message)
+            }
+        } catch {
+            throw CLIError.failed(error.localizedDescription)
+        }
     }
 
     private enum Focus {
@@ -241,26 +173,5 @@ enum CLICommands {
         let gb = Double(bytes) / 1_073_741_824
         if gb >= 10 { return String(format: "%.0f GB", gb) }
         return String(format: "%.1f GB", gb)
-    }
-
-    private static func persistKeyboardLocked(_ locked: Bool) {
-        ToolStateStore.shared.update { state in
-            state.keyboardLocked = locked
-            if locked {
-                var boot = timeval()
-                var size = MemoryLayout<timeval>.size
-                sysctlbyname("kern.boottime", &boot, &size, nil, 0)
-                state.keyboardLockBoot = TimeInterval(boot.tv_sec)
-            }
-        }
-    }
-
-    private static func lidError(_ error: Error) -> CLIError {
-        let message = error.localizedDescription
-        if message.localizedCaseInsensitiveContains("cancel")
-            || message.localizedCaseInsensitiveContains("administrator") {
-            return .permission(message)
-        }
-        return .failed(message)
     }
 }

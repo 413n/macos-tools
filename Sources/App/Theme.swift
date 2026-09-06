@@ -78,18 +78,9 @@ enum HomeTab: String, CaseIterable, Identifiable {
     }
 }
 
-enum HomeTool: String, CaseIterable, Identifiable {
-    case keyboard
-    case scroll
-    case lid
-    case awake
-    case machine
-    case battery
-    case network
-    case storage
+typealias HomeTool = ToolID
 
-    var id: String { rawValue }
-
+extension ToolID {
     var title: String {
         switch self {
         case .keyboard: "Keyboard"
@@ -140,10 +131,7 @@ enum HomeTool: String, CaseIterable, Identifiable {
     }
 
     var isInformational: Bool {
-        switch self {
-        case .machine, .battery, .network, .storage: true
-        default: false
-        }
+        kind == .informational
     }
 
     var tab: HomeTab {

@@ -69,11 +69,7 @@ enum CLIParser {
         }
     }
 
-    private enum Tool {
-        case keyboard, scroll, lid, awake
-    }
-
-    private static func parseSwitch(_ tokens: [String], tool: Tool) throws -> CLISwitch {
+    private static func parseSwitch(_ tokens: [String], tool: ToolID) throws -> CLISwitch {
         guard let action = tokens.first else {
             return .status
         }
@@ -91,7 +87,7 @@ enum CLIParser {
         }
     }
 
-    private static func parseOn(_ tokens: [String], tool: Tool) throws -> CLISwitch {
+    private static func parseOn(_ tokens: [String], tool: ToolID) throws -> CLISwitch {
         var minutes: Int?
         var dim: Bool?
         var i = 0
@@ -121,7 +117,7 @@ enum CLIParser {
         return .on(minutes: minutes, dim: dim)
     }
 
-    private static func validateMinutes(_ value: Int, tool: Tool) throws -> Int {
+    private static func validateMinutes(_ value: Int, tool: ToolID) throws -> Int {
         let allowed = tool == .keyboard ? keyboardMinutes : awakeMinutes
         guard allowed.contains(value) else {
             throw CLIError.usage(
@@ -131,12 +127,7 @@ enum CLIParser {
         return value
     }
 
-    private static func toolName(_ tool: Tool) -> String {
-        switch tool {
-        case .keyboard: return "keyboard"
-        case .scroll: return "scroll"
-        case .lid: return "lid"
-        case .awake: return "awake"
-        }
+    private static func toolName(_ tool: ToolID) -> String {
+        tool.rawValue
     }
 }

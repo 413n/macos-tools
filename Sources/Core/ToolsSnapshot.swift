@@ -88,11 +88,13 @@ struct ToolsSnapshot: Encodable {
 
 enum StatusBuilder {
     static func make(includeMac: Bool) -> ToolsSnapshot {
+        let tools = ToolRegistry.shared
         let store = ToolStateStore.shared.current
-        let keyboard = (try? KeyboardLockService().snapshot()) ?? .init(locked: false, remainingMinutes: nil)
+        let keyboard = (try? tools.keyboard.hardwareSnapshot())
+            ?? .init(locked: false, remainingMinutes: nil)
         let mice = DeviceMonitor.listMiceOnce()
-        let lid = LidSleepService().snapshot()
-        let awake = CaffeinateService().snapshot()
+        let lid = tools.lid.hardwareSnapshot()
+        let awake = tools.awake.hardwareSnapshot()
         return ToolsSnapshot(
             keyboard: KeyboardStatusJSON(
                 locked: keyboard.locked,
