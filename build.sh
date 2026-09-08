@@ -1,17 +1,19 @@
 #!/bin/bash
 #
-# Build NAF Tools as a menu-bar .app (plus naf-tools CLI) and install to ~/Applications.
+# Build Yeobun as a menu-bar .app (plus yeobun CLI) and install to ~/Applications.
 # Pass --dist to skip install and write a versioned disk image under build/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_NAME="NAF Tools"
-EXEC="NAFTools"
+APP_NAME="Yeobun"
+EXEC="Yeobun"
+# APFS is usually case-insensitive, so `Yeobun` and `yeobun` cannot share Contents/MacOS.
+CLI_BIN="yeobun-cli"
 BUILD="$ROOT/build"
 APP="$BUILD/${APP_NAME}.app"
 SDK="$(xcrun --show-sdk-path)"
 DEST="$HOME/Applications/${APP_NAME}.app"
-SIGN_CN="NAF Tools Signing"
+SIGN_CN="Yeobun Signing"
 SKIP_INSTALL=0
 MAKE_DMG=0
 
@@ -81,7 +83,7 @@ echo "→ app icon"
 swiftc -O -sdk "$SDK" -framework AppKit \
   -o "$BUILD/make-icon" \
   "$ROOT/scripts/MakeIcon.swift"
-"$BUILD/make-icon" "$APP/Contents/Resources/AppIcon.icns"
+"$BUILD/make-icon" "$APP/Contents/Resources/AppIcon.icns" "$ROOT/docs/screenshots/icon.png"
 
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
@@ -110,29 +112,29 @@ swiftc "${SWIFTC_COMMON[@]}" \
   -o "$APP/Contents/MacOS/$EXEC" \
   "${CORE_SOURCES[@]}" "${APP_SOURCES[@]}"
 
-echo "→ compile naf-tools CLI"
+echo "→ compile yeobun CLI"
 swiftc "${SWIFTC_COMMON[@]}" \
-  -o "$APP/Contents/MacOS/naf-tools" \
+  -o "$APP/Contents/MacOS/$CLI_BIN" \
   "${CORE_SOURCES[@]}" "${CLI_SOURCES[@]}"
 
-echo "→ compile naf-tools-scroll helper"
+echo "→ compile yeobun-scroll helper"
 swiftc "${SWIFTC_COMMON[@]}" \
-  -o "$APP/Contents/MacOS/naf-tools-scroll" \
+  -o "$APP/Contents/MacOS/yeobun-scroll" \
   "${CORE_SOURCES[@]}" "${HELPER_SOURCES[@]}"
 
 echo "→ sign"
 SIGN_ID="$(ensure_codesign_identity)"
-if [[ -n "$SIGN_ID" ]] && codesign --force --sign "$SIGN_ID" --identifier com.alessandro.naf-tools "$APP" >/dev/null 2>&1; then
+if [[ -n "$SIGN_ID" ]] && codesign --force --sign "$SIGN_ID" --identifier studio.n6.yeobun "$APP" >/dev/null 2>&1; then
   echo "  signed with $SIGN_ID"
 else
   echo "  signed ad-hoc (rebuilds will need Accessibility toggled again)"
-  codesign --force --sign - --identifier com.alessandro.naf-tools "$APP" >/dev/null
+  codesign --force --sign - --identifier studio.n6.yeobun "$APP" >/dev/null
 fi
 
 if [[ "$MAKE_DMG" == "1" ]]; then
   echo "→ disk image"
   VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
-  DMG="$BUILD/NAF-Tools-${VERSION}.dmg"
+  DMG="$BUILD/Yeobun-${VERSION}.dmg"
   STAGE="$BUILD/dmg"
   rm -rf "$STAGE" "$DMG"
   mkdir -p "$STAGE"
@@ -174,12 +176,12 @@ touch "$DEST"
 
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
-ln -sf "$DEST/Contents/MacOS/naf-tools" "$BIN_DIR/naf-tools"
+ln -sf "$DEST/Contents/MacOS/$CLI_BIN" "$BIN_DIR/yeobun"
 
 echo
 echo "Installed: $DEST"
-echo "CLI: $BIN_DIR/naf-tools"
-echo "Open it from the menu bar (N logo)."
+echo "CLI: $BIN_DIR/yeobun"
+echo "Open it from the menu bar (wrench logo)."
 echo "Launch with:  open \"$DEST\""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   echo "Add the CLI to your PATH:  export PATH=\"$BIN_DIR:\$PATH\""

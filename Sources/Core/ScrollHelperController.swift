@@ -6,13 +6,13 @@ final class ScrollHelperController {
 
     var isRunning: Bool {
         let pid = pid_t(ToolStateStore.shared.current.scrollHelperPID)
-        return DetachedProcess.isRunning(pid: pid, commandContains: NAFPaths.scrollHelperName)
+        return DetachedProcess.isRunning(pid: pid, commandContains: YeobunPaths.scrollHelperName)
     }
 
     @discardableResult
     func start() -> Bool {
         if isRunning { return true }
-        let url = NAFPaths.scrollHelperURL
+        let url = YeobunPaths.scrollHelperURL
         guard FileManager.default.isExecutableFile(atPath: url.path) else {
             return false
         }
@@ -30,10 +30,10 @@ final class ScrollHelperController {
 
     func stop() {
         let pid = pid_t(ToolStateStore.shared.current.scrollHelperPID)
-        if DetachedProcess.isRunning(pid: pid, commandContains: NAFPaths.scrollHelperName) {
+        if DetachedProcess.isRunning(pid: pid, commandContains: YeobunPaths.scrollHelperName) {
             kill(pid, SIGTERM)
             for _ in 0..<30 {
-                if !DetachedProcess.isRunning(pid: pid, commandContains: NAFPaths.scrollHelperName) {
+                if !DetachedProcess.isRunning(pid: pid, commandContains: YeobunPaths.scrollHelperName) {
                     break
                 }
                 usleep(50_000)

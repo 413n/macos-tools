@@ -1,7 +1,7 @@
 import Foundation
 
 @main
-struct NAFToolsCLI {
+struct YeobunCLI {
     static func main() {
         do {
             let request = try CLIParser.parse(Array(CommandLine.arguments.dropFirst()))

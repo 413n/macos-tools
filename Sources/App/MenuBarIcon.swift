@@ -35,7 +35,7 @@ enum MenuBarStats: String, CaseIterable, Identifiable {
     }
 }
 
-/// Menu-bar template of the Narciso N mark, optionally followed by active-tool symbols.
+/// Menu-bar template of the Yeobun Y Wrench mark, optionally followed by active-tool symbols.
 ///
 /// A PDF representation stays sharp after display scale changes (unplugging a
 /// monitor, moving the menu bar between 1x and 2x screens). Cached bitmaps do not.
@@ -82,7 +82,7 @@ enum MenuBarIcon {
     }
 
     static func tooltip(tools: [ToolID], statsText: String? = nil) -> String {
-        var parts = ["NAF Tools"]
+        var parts = ["Yeobun"]
         if let statsText, !statsText.isEmpty {
             parts.append(statsText)
         }
@@ -97,7 +97,7 @@ enum MenuBarIcon {
         image.size = pointSize
         image.isTemplate = true
         image.cacheMode = .never
-        image.accessibilityDescription = "NAF Tools"
+        image.accessibilityDescription = "Yeobun"
         return image
     }
 
@@ -172,7 +172,7 @@ enum MenuBarIcon {
         }
         image.isTemplate = true
         image.cacheMode = .never
-        image.accessibilityDescription = "NAF Tools"
+        image.accessibilityDescription = "Yeobun"
         return image
     }
 
@@ -213,7 +213,7 @@ enum MenuBarIcon {
         }
         image.isTemplate = true
         image.cacheMode = .never
-        image.accessibilityDescription = "NAF Tools"
+        image.accessibilityDescription = "Yeobun"
         return image
     }
 
@@ -224,45 +224,72 @@ enum MenuBarIcon {
         let drawable = size.width - padding * 2
         ctx.saveGState()
         ctx.translateBy(x: padding, y: size.height - padding)
-        ctx.scaleBy(x: drawable / NarcisoMark.canvas, y: -drawable / NarcisoMark.canvas)
+        ctx.scaleBy(x: drawable / YeobunMark.canvas, y: -drawable / YeobunMark.canvas)
         ctx.setFillColor(CGColor(gray: 0, alpha: 1))
-        ctx.addPath(NarcisoMark.cgPath())
-        ctx.fillPath()
+
+        ctx.addPath(YeobunMark.cgPath())
+        ctx.clip()
+
+        let relievedFill = CGMutablePath()
+        relievedFill.addRect(CGRect(x: 0, y: 0, width: YeobunMark.canvas, height: YeobunMark.canvas))
+        relievedFill.addPath(YeobunMark.reliefPath())
+        ctx.addPath(relievedFill)
+        ctx.drawPath(using: .eoFill)
         ctx.restoreGState()
     }
 }
 
-enum NarcisoMark {
-    static let canvas: CGFloat = 500
+enum YeobunMark {
+    static let canvas: CGFloat = 24
 
     static func cgPath() -> CGPath {
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: 0, y: 500))
-        path.addLine(to: CGPoint(x: 100.607, y: 500))
-        path.addLine(to: CGPoint(x: 100.607, y: 263.5))
-        path.addLine(to: CGPoint(x: 258, y: 500))
-        path.addLine(to: CGPoint(x: 392, y: 500))
-        path.addLine(to: CGPoint(x: 59.29, y: 0))
-        path.closeSubpath()
+        let silhouette = CGMutablePath()
+        silhouette.move(to: CGPoint(x: 3, y: 2.75))
+        silhouette.addLine(to: CGPoint(x: 7, y: 2.75))
+        silhouette.addLine(to: CGPoint(x: 9.85, y: 7.9))
+        silhouette.addLine(to: CGPoint(x: 14.15, y: 7.9))
+        silhouette.addLine(to: CGPoint(x: 17, y: 2.75))
+        silhouette.addLine(to: CGPoint(x: 21, y: 2.75))
+        silhouette.addLine(to: CGPoint(x: 19.25, y: 8.85))
+        silhouette.addLine(to: CGPoint(x: 15, y: 11.7))
+        silhouette.addLine(to: CGPoint(x: 15, y: 18.75))
+        silhouette.addCurve(
+            to: CGPoint(x: 12, y: 22),
+            control1: CGPoint(x: 15, y: 20.68),
+            control2: CGPoint(x: 13.66, y: 22)
+        )
+        silhouette.addCurve(
+            to: CGPoint(x: 9, y: 18.75),
+            control1: CGPoint(x: 10.34, y: 22),
+            control2: CGPoint(x: 9, y: 20.68)
+        )
+        silhouette.addLine(to: CGPoint(x: 9, y: 11.7))
+        silhouette.addLine(to: CGPoint(x: 4.75, y: 8.85))
+        silhouette.closeSubpath()
 
-        path.move(to: CGPoint(x: 500, y: 500))
-        path.addLine(to: CGPoint(x: 500, y: 0))
-        path.addLine(to: CGPoint(x: 399.393, y: 0))
-        path.addLine(to: CGPoint(x: 399.393, y: 236.5))
-        path.addLine(to: CGPoint(x: 242, y: 0))
-        path.addLine(to: CGPoint(x: 108, y: 0))
-        path.addLine(to: CGPoint(x: 440.71, y: 500))
-        path.closeSubpath()
-        return path
+        let result = CGMutablePath()
+        result.addPath(silhouette)
+        result.addPath(silhouette.copy(
+            strokingWithWidth: 0.65,
+            lineCap: .butt,
+            lineJoin: .round,
+            miterLimit: 10
+        ))
+        return result
+    }
+
+    static func reliefPath() -> CGPath {
+        let result = CGMutablePath()
+        result.addEllipse(in: CGRect(x: 10.85, y: 17.6, width: 2.3, height: 2.3))
+        return result
     }
 }
 
-struct NarcisoN: Shape {
+struct YeobunN: Shape {
     func path(in rect: CGRect) -> Path {
-        let sx = rect.width / NarcisoMark.canvas
-        let sy = rect.height / NarcisoMark.canvas
+        let sx = rect.width / YeobunMark.canvas
+        let sy = rect.height / YeobunMark.canvas
         var transform = CGAffineTransform(a: sx, b: 0, c: 0, d: sy, tx: rect.minX, ty: rect.minY)
-        return Path(NarcisoMark.cgPath().copy(using: &transform) ?? NarcisoMark.cgPath())
+        return Path(YeobunMark.cgPath().copy(using: &transform) ?? YeobunMark.cgPath())
     }
 }

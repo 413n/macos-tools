@@ -33,10 +33,22 @@ struct ToolsPanel: View {
                 }
             }
 
-            Text(presentation.isEditingHome ? "Edit" : presentation.route.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.primary)
+            if presentation.route == .home, !presentation.isEditingHome {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Brand.studio)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(Brand.product)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
                 .lineLimit(1)
+            } else {
+                Text(presentation.isEditingHome ? "Edit" : presentation.route.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
 
             if presentation.route == .home, !presentation.isEditingHome {
                 Text(model.appVersion)
@@ -1198,7 +1210,7 @@ private struct SettingsDetail: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Open at login")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Keep NAF Tools in the menu bar")
+                        Text("Keep Yeobun in the menu bar")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -1296,7 +1308,7 @@ private struct SettingsDetail: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Version")
                             .font(.system(size: 13, weight: .semibold))
-                        Text(model.appVersion)
+                        Text("\(Brand.studio) · \(model.appVersion)")
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -1330,7 +1342,7 @@ private struct SettingsDetail: View {
                 }
             }
 
-            Button("Quit NAF Tools") {
+            Button("Quit Yeobun") {
                 model.quit()
             }
             .buttonStyle(.borderless)
@@ -1360,7 +1372,7 @@ private struct GroupedPanel<Content: View>: View {
 
 private struct LogoMark: View {
     var body: some View {
-        NarcisoN()
+        YeobunN()
             .fill(.primary)
             .frame(width: 14, height: 14)
             .frame(width: Radius.chrome, height: Radius.chrome)

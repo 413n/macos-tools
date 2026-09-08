@@ -5,17 +5,17 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>NAF Tools</string>
+	<string>Yeobun</string>
 	<key>CFBundleExecutable</key>
-	<string>NAFTools</string>
+	<string>Yeobun</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.alessandro.naf-tools</string>
+	<string>studio.n6.yeobun</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NAF Tools</string>
+	<string>Yeobun</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -32,7 +32,9 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © N6 Studio</string>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>NAF Tools intercepts mouse scroll events so it can reverse the wheel without changing trackpad scrolling.</string>
+	<string>Yeobun intercepts mouse scroll events so it can reverse the wheel without changing trackpad scrolling.</string>
 </dict>
 </plist>

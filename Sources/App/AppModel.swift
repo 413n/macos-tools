@@ -394,7 +394,7 @@ final class AppModel: ObservableObject {
         }
 
         stateObserver = DistributedNotificationCenter.default().addObserver(
-            forName: NAFPaths.stateDidChangeNotification,
+            forName: YeobunPaths.stateDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] notification in
@@ -994,7 +994,7 @@ final class AppModel: ObservableObject {
         } else if !accessibilityTrusted {
             scrollStatus = "Needs Accessibility permission to reverse the wheel."
         } else {
-            scrollStatus = "Could not start scroll reverse. Toggle NAF Tools off and on in Accessibility, then reopen the app."
+            scrollStatus = "Could not start scroll reverse. Toggle Yeobun off and on in Accessibility, then reopen the app."
         }
     }
 

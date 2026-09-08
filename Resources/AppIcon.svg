@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="background" x1="154" y1="104" x2="870" y2="938" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#292E35"/>
+      <stop offset=".5" stop-color="#13171C"/>
+      <stop offset="1" stop-color="#050607"/>
+    </linearGradient>
+    <radialGradient id="lacquer-sheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 245) rotate(72) scale(655)">
+      <stop stop-color="#8B99A8" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#8B99A8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pearl" x1="128" y1="185" x2="896" y2="385" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8CFD0"/>
+      <stop offset=".25" stop-color="#F2E9DD"/>
+      <stop offset=".48" stop-color="#D3C7DE"/>
+      <stop offset=".7" stop-color="#E7F0EB"/>
+      <stop offset="1" stop-color="#91B5C2"/>
+    </linearGradient>
+    <linearGradient id="pearl-handle" x1="470" y1="410" x2="565" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEE7DC"/>
+      <stop offset=".38" stop-color="#A8BAC6"/>
+      <stop offset=".68" stop-color="#C8B5D0"/>
+      <stop offset="1" stop-color="#EBDCC5"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="300" y1="135" x2="610" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity=".36"/>
+      <stop offset=".42" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="handle-hole" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="white"/>
+      <circle cx="512" cy="800" r="45" fill="black"/>
+    </mask>
+    <filter id="mark-shadow" x="56" y="62" width="912" height="928" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="30" stdDeviation="30" flood-color="#000" flood-opacity=".62"/>
+    </filter>
+    <path id="wrench" d="M128 140h170l122 220h184l122-220h170l-76 280-180 120v290c0 46-37.3 72-128 72s-128-26-128-72V540L204 420l-76-280Z"/>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#background)"/>
+  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#lacquer-sheen)"/>
+  <g transform="translate(512 520) scale(.82) translate(-512 -512)" filter="url(#mark-shadow)" mask="url(#handle-hole)">
+    <use href="#wrench" fill="url(#pearl)" stroke="#E9F0EE" stroke-opacity=".42" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M384 425h256v405c0 46-37.3 72-128 72s-128-26-128-72V425Z" fill="url(#pearl-handle)"/>
+    <path d="M420 360h184l36 65H384l36-65Z" fill="#D8D6DF"/>
+    <use href="#wrench" fill="url(#highlight)" opacity=".34"/>
+  </g>
+</svg>

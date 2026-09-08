@@ -8,7 +8,7 @@ import Foundation
 /// `pmset -b disablesleep 1` plus `pmset -b sleep 0` keep the Mac awake on
 /// battery with the lid shut. Restoring uses `disablesleep 0` and `sleep 60`.
 /// Changing those settings needs root. After a one-time administrator grant
-/// (`/etc/sudoers.d/naf-tools-lid-sleep`), later toggles use `sudo -n` and do
+/// (`/etc/sudoers.d/yeobun-lid-sleep`), later toggles use `sudo -n` and do
 /// not prompt.
 struct LidSleepError: LocalizedError {
     let errorDescription: String?
@@ -21,7 +21,7 @@ final class LidSleepService {
     }
 
     static let defaultRestoreMinutes = 60
-    private static let sudoersPath = "/etc/sudoers.d/naf-tools-lid-sleep"
+    private static let sudoersPath = "/etc/sudoers.d/yeobun-lid-sleep"
 
     func snapshot() -> Snapshot {
         let general = run("/usr/bin/pmset", ["-g"], captureOutput: true).output
@@ -82,7 +82,7 @@ final class LidSleepService {
             .map { "/usr/bin/pmset " + $0.joined(separator: " ") }
             .joined(separator: " && ")
         let shell =
-            "set -e; tmp=/tmp/naf-tools-lid-sleep.$$; /usr/bin/printf '%s\\n' '\(rule)' > $tmp; "
+            "set -e; tmp=/tmp/yeobun-lid-sleep.$$; /usr/bin/printf '%s\\n' '\(rule)' > $tmp; "
             + "/usr/sbin/visudo -cf $tmp; /usr/sbin/chown root:wheel $tmp; /bin/chmod 0440 $tmp; "
             + "/bin/mv $tmp \(Self.sudoersPath); \(pmset)"
         let status = runInteractive("/usr/bin/sudo", ["/bin/sh", "-lc", shell])
@@ -121,7 +121,7 @@ final class LidSleepService {
             .map { "/usr/bin/pmset " + $0.joined(separator: " ") }
             .joined(separator: " && ")
         let shell =
-            "set -e; tmp=/tmp/naf-tools-lid-sleep.$$; /usr/bin/printf '%s\\n' '\(rule)' > $tmp; "
+            "set -e; tmp=/tmp/yeobun-lid-sleep.$$; /usr/bin/printf '%s\\n' '\(rule)' > $tmp; "
             + "/usr/sbin/chown root:wheel $tmp; /bin/chmod 0440 $tmp; /usr/sbin/visudo -cf $tmp; "
             + "/bin/mv $tmp \(Self.sudoersPath); \(pmset)"
         try runOsascriptAdmin(shell)

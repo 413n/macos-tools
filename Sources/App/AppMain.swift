@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct NAFToolsApp: App {
+struct YeobunApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

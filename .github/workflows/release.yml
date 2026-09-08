@@ -70,10 +70,10 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           NOTES: ${{ inputs.notes }}
         run: |
-          dmg="build/NAF-Tools-${VERSION}.dmg"
+          dmg="build/Yeobun-${VERSION}.dmg"
           git tag "$TAG"
           git push origin "$TAG"
-          title="NAF Tools ${VERSION}"
+          title="Yeobun ${VERSION}"
           if [[ -n "$NOTES" ]]; then
             gh release create "$TAG" "$dmg" --title "$title" --notes "$NOTES"
           else

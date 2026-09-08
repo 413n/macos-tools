@@ -34,7 +34,7 @@ enum UpdateCheckService {
     static func fetchLatest(completion: @escaping (Result<LatestRelease, Error>) -> Void) -> URLSessionDataTask {
         var request = URLRequest(url: latestReleaseURL, timeoutInterval: 10)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("NAF-Tools/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Yeobun/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in

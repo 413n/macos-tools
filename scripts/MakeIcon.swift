@@ -1,5 +1,4 @@
 import AppKit
-import CoreText
 import Foundation
 
 guard CommandLine.arguments.count >= 2 else {
@@ -9,66 +8,237 @@ guard CommandLine.arguments.count >= 2 else {
 
 let icnsURL = URL(fileURLWithPath: CommandLine.arguments[1])
 let previewURL = CommandLine.arguments.count >= 3 ? URL(fileURLWithPath: CommandLine.arguments[2]) : nil
-let iconset = FileManager.default.temporaryDirectory.appendingPathComponent("NAFTools.iconset")
+let iconset = FileManager.default.temporaryDirectory.appendingPathComponent("Yeobun.iconset")
 try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 
-/// Same geometry as `Resources/logo.svg` / `NarcisoMark`.
-enum NarcisoMark {
-    static let canvas: CGFloat = 500
+/// Native renderer for the canonical vector master in `Resources/AppIcon.svg`.
+enum AppWrenchMark {
+    static let canvas: CGFloat = 1024
+    static let scale: CGFloat = 0.82
+    static let placement = CGAffineTransform(
+        a: scale,
+        b: 0,
+        c: 0,
+        d: scale,
+        tx: 512 - 512 * scale,
+        ty: 520 - 512 * scale
+    )
 
-    static func cgPath() -> CGPath {
+    static func silhouette() -> CGPath {
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: 0, y: 500))
-        path.addLine(to: CGPoint(x: 100.607, y: 500))
-        path.addLine(to: CGPoint(x: 100.607, y: 263.5))
-        path.addLine(to: CGPoint(x: 258, y: 500))
-        path.addLine(to: CGPoint(x: 392, y: 500))
-        path.addLine(to: CGPoint(x: 59.29, y: 0))
-        path.closeSubpath()
-
-        path.move(to: CGPoint(x: 500, y: 500))
-        path.addLine(to: CGPoint(x: 500, y: 0))
-        path.addLine(to: CGPoint(x: 399.393, y: 0))
-        path.addLine(to: CGPoint(x: 399.393, y: 236.5))
-        path.addLine(to: CGPoint(x: 242, y: 0))
-        path.addLine(to: CGPoint(x: 108, y: 0))
-        path.addLine(to: CGPoint(x: 440.71, y: 500))
+        path.move(to: CGPoint(x: 128, y: 140))
+        path.addLine(to: CGPoint(x: 298, y: 140))
+        path.addLine(to: CGPoint(x: 420, y: 360))
+        path.addLine(to: CGPoint(x: 604, y: 360))
+        path.addLine(to: CGPoint(x: 726, y: 140))
+        path.addLine(to: CGPoint(x: 896, y: 140))
+        path.addLine(to: CGPoint(x: 820, y: 420))
+        path.addLine(to: CGPoint(x: 640, y: 540))
+        path.addLine(to: CGPoint(x: 640, y: 830))
+        path.addCurve(
+            to: CGPoint(x: 512, y: 902),
+            control1: CGPoint(x: 640, y: 876),
+            control2: CGPoint(x: 602.7, y: 902)
+        )
+        path.addCurve(
+            to: CGPoint(x: 384, y: 830),
+            control1: CGPoint(x: 421.3, y: 902),
+            control2: CGPoint(x: 384, y: 876)
+        )
+        path.addLine(to: CGPoint(x: 384, y: 540))
+        path.addLine(to: CGPoint(x: 204, y: 420))
         path.closeSubpath()
         return path
     }
-}
 
-func toolsLine(matchingWidth width: CGFloat) -> (CTLine, CGRect) {
-    let fontSize = width * 0.24
-    let font = NSFont.systemFont(ofSize: fontSize, weight: .black)
-    let white = NSColor.white
-
-    func makeLine(kern: CGFloat) -> CTLine {
-        let styled = NSMutableAttributedString(string: "TOOLS", attributes: [
-            .font: font,
-            .foregroundColor: white
-        ])
-        if styled.length > 1 {
-            styled.addAttribute(.kern, value: kern, range: NSRange(location: 0, length: styled.length - 1))
-        }
-        return CTLineCreateWithAttributedString(styled)
+    static func handle() -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 384, y: 425))
+        path.addLine(to: CGPoint(x: 640, y: 425))
+        path.addLine(to: CGPoint(x: 640, y: 830))
+        path.addCurve(
+            to: CGPoint(x: 512, y: 902),
+            control1: CGPoint(x: 640, y: 876),
+            control2: CGPoint(x: 602.7, y: 902)
+        )
+        path.addCurve(
+            to: CGPoint(x: 384, y: 830),
+            control1: CGPoint(x: 421.3, y: 902),
+            control2: CGPoint(x: 384, y: 876)
+        )
+        path.closeSubpath()
+        return path
     }
 
-    let natural = CTLineGetImageBounds(makeLine(kern: 0), nil)
-    let kern = (width - natural.width) / 4
-    let line = makeLine(kern: kern)
-    return (line, CTLineGetImageBounds(line, nil))
+    static func joint() -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 420, y: 360))
+        path.addLine(to: CGPoint(x: 604, y: 360))
+        path.addLine(to: CGPoint(x: 640, y: 425))
+        path.addLine(to: CGPoint(x: 384, y: 425))
+        path.closeSubpath()
+        return path
+    }
+
+    static func placedHole() -> CGPath {
+        var transform = placement
+        let hole = CGPath(ellipseIn: CGRect(x: 467, y: 755, width: 90, height: 90), transform: nil)
+        return hole.copy(using: &transform) ?? hole
+    }
 }
 
-func drawMark(_ ctx: CGContext, in rect: CGRect) {
+func rgb(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> CGColor {
+    CGColor(red: red / 255, green: green / 255, blue: blue / 255, alpha: 1)
+}
+
+func rgba(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat, _ alpha: CGFloat) -> CGColor {
+    CGColor(red: red / 255, green: green / 255, blue: blue / 255, alpha: alpha)
+}
+
+func drawGradient(
+    _ ctx: CGContext,
+    clippedTo path: CGPath,
+    colors: [CGColor],
+    locations: [CGFloat]? = nil,
+    start: CGPoint,
+    end: CGPoint
+) {
+    guard let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: colors as CFArray,
+        locations: locations
+    ) else { return }
     ctx.saveGState()
-    ctx.translateBy(x: rect.minX, y: rect.maxY)
-    ctx.scaleBy(x: rect.width / NarcisoMark.canvas, y: -rect.height / NarcisoMark.canvas)
-    ctx.setFillColor(CGColor(gray: 1, alpha: 1))
-    ctx.addPath(NarcisoMark.cgPath())
+    ctx.addPath(path)
+    ctx.clip()
+    ctx.drawLinearGradient(gradient, start: start, end: end, options: [])
+    ctx.restoreGState()
+}
+
+func drawRadialGradient(
+    _ ctx: CGContext,
+    clippedTo path: CGPath,
+    colors: [CGColor],
+    startCenter: CGPoint,
+    startRadius: CGFloat,
+    endCenter: CGPoint,
+    endRadius: CGFloat
+) {
+    guard let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: colors as CFArray,
+        locations: [0, 1]
+    ) else { return }
+    ctx.saveGState()
+    ctx.addPath(path)
+    ctx.clip()
+    ctx.drawRadialGradient(
+        gradient,
+        startCenter: startCenter,
+        startRadius: startRadius,
+        endCenter: endCenter,
+        endRadius: endRadius,
+        options: []
+    )
+    ctx.restoreGState()
+}
+
+func drawAppIcon(_ ctx: CGContext, pixels: CGFloat) {
+    ctx.saveGState()
+    ctx.translateBy(x: 0, y: pixels)
+    ctx.scaleBy(x: pixels / AppWrenchMark.canvas, y: -pixels / AppWrenchMark.canvas)
+
+    let plate = CGPath(
+        roundedRect: CGRect(x: 64, y: 64, width: 896, height: 896),
+        cornerWidth: 205,
+        cornerHeight: 205,
+        transform: nil
+    )
+    drawGradient(
+        ctx,
+        clippedTo: plate,
+        colors: [rgb(41, 46, 53), rgb(19, 23, 28), rgb(5, 6, 7)],
+        locations: [0, 0.5, 1],
+        start: CGPoint(x: 154, y: 104),
+        end: CGPoint(x: 870, y: 938)
+    )
+    drawRadialGradient(
+        ctx,
+        clippedTo: plate,
+        colors: [rgba(139, 153, 168, 0.2), rgba(139, 153, 168, 0)],
+        startCenter: CGPoint(x: 420, y: 245),
+        startRadius: 0,
+        endCenter: CGPoint(x: 420, y: 245),
+        endRadius: 655
+    )
+
+    ctx.saveGState()
+    ctx.concatenate(AppWrenchMark.placement)
+    let silhouette = AppWrenchMark.silhouette()
+
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -30), blur: 30, color: rgba(0, 0, 0, 0.62))
+    ctx.setFillColor(rgba(0, 0, 0, 0.28))
+    ctx.addPath(silhouette)
     ctx.fillPath()
+    ctx.restoreGState()
+
+    drawGradient(
+        ctx,
+        clippedTo: silhouette,
+        colors: [rgb(168, 207, 208), rgb(242, 233, 221), rgb(211, 199, 222), rgb(231, 240, 235), rgb(145, 181, 194)],
+        locations: [0, 0.25, 0.48, 0.7, 1],
+        start: CGPoint(x: 128, y: 185),
+        end: CGPoint(x: 896, y: 385)
+    )
+
+    ctx.setStrokeColor(rgba(233, 240, 238, 0.42))
+    ctx.setLineWidth(18)
+    ctx.setLineJoin(.round)
+    ctx.addPath(silhouette)
+    ctx.strokePath()
+
+    drawGradient(
+        ctx,
+        clippedTo: AppWrenchMark.handle(),
+        colors: [rgb(238, 231, 220), rgb(168, 186, 198), rgb(200, 181, 208), rgb(235, 220, 197)],
+        locations: [0, 0.38, 0.68, 1],
+        start: CGPoint(x: 470, y: 410),
+        end: CGPoint(x: 565, y: 900)
+    )
+
+    ctx.setFillColor(rgb(216, 214, 223))
+    ctx.addPath(AppWrenchMark.joint())
+    ctx.fillPath()
+
+    drawGradient(
+        ctx,
+        clippedTo: silhouette,
+        colors: [rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)],
+        start: CGPoint(x: 300, y: 135),
+        end: CGPoint(x: 610, y: 900)
+    )
+    ctx.restoreGState()
+
+    let placedHole = AppWrenchMark.placedHole()
+    drawGradient(
+        ctx,
+        clippedTo: placedHole,
+        colors: [rgb(41, 46, 53), rgb(19, 23, 28), rgb(5, 6, 7)],
+        locations: [0, 0.5, 1],
+        start: CGPoint(x: 154, y: 104),
+        end: CGPoint(x: 870, y: 938)
+    )
+    drawRadialGradient(
+        ctx,
+        clippedTo: placedHole,
+        colors: [rgba(139, 153, 168, 0.2), rgba(139, 153, 168, 0)],
+        startCenter: CGPoint(x: 420, y: 245),
+        startRadius: 0,
+        endCenter: CGPoint(x: 420, y: 245),
+        endRadius: 655
+    )
     ctx.restoreGState()
 }
 
@@ -92,46 +262,7 @@ func render(pixels: Int) -> NSBitmapImageRep {
     ctx.setShouldAntialias(true)
     ctx.interpolationQuality = .high
 
-    let s = CGFloat(pixels)
-    let inset = s * 0.08
-    let plate = CGRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
-    let radius = plate.width * 0.22
-
-    let shape = CGPath(
-        roundedRect: plate,
-        cornerWidth: radius,
-        cornerHeight: radius,
-        transform: nil
-    )
-    ctx.setFillColor(CGColor(gray: 0, alpha: 1))
-    ctx.addPath(shape)
-    ctx.fillPath()
-
-    let showWordmark = pixels >= 128
-    if showWordmark {
-        let logoWidth = plate.width * 0.58
-        let (line, glyphs) = toolsLine(matchingWidth: logoWidth)
-        let gap = logoWidth * 0.08
-        let stackHeight = logoWidth + gap + glyphs.height
-        let stackMinY = plate.midY - stackHeight / 2 + plate.height * 0.015
-        let originX = plate.midX - logoWidth / 2
-        let logoRect = CGRect(x: originX, y: stackMinY + glyphs.height + gap, width: logoWidth, height: logoWidth)
-        drawMark(ctx, in: logoRect)
-
-        ctx.saveGState()
-        ctx.textPosition = CGPoint(x: originX - glyphs.minX, y: stackMinY - glyphs.minY)
-        CTLineDraw(line, ctx)
-        ctx.restoreGState()
-    } else {
-        let logoWidth = plate.width * 0.64
-        let logoRect = CGRect(
-            x: plate.midX - logoWidth / 2,
-            y: plate.midY - logoWidth / 2,
-            width: logoWidth,
-            height: logoWidth
-        )
-        drawMark(ctx, in: logoRect)
-    }
+    drawAppIcon(ctx, pixels: CGFloat(pixels))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

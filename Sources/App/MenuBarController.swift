@@ -64,7 +64,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        menu.addItem(withTitle: "Open NAF Tools", action: #selector(openFromMenu), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Yeobun", action: #selector(openFromMenu), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(toggleItem(
             title: "Keyboard lock",
@@ -188,7 +188,7 @@ final class MenuBarController: NSObject {
     }
 
     private func configureStatusItem() {
-        statusItem.autosaveName = "NAFTools.StatusItem"
+        statusItem.autosaveName = "Yeobun.StatusItem"
         statusItem.isVisible = true
         if #available(macOS 13.0, *) {
             statusItem.behavior = []

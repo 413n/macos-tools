@@ -1,12 +1,17 @@
 import Darwin
 import Foundation
 
-enum NAFPaths {
-    static let stateDidChangeNotification = Notification.Name("com.alessandro.naf-tools.stateDidChange")
-    static let scrollReloadNotification = Notification.Name("com.alessandro.naf-tools.scrollReload")
-    static let scrollHelperName = "naf-tools-scroll"
+enum YeobunPaths {
+    static let stateDidChangeNotification = Notification.Name("studio.n6.yeobun.stateDidChange")
+    static let scrollReloadNotification = Notification.Name("studio.n6.yeobun.scrollReload")
+    static let scrollHelperName = "yeobun-scroll"
 
     static var applicationSupport: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Yeobun", isDirectory: true)
+    }
+
+    static var legacyApplicationSupport: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/NAF Tools", isDirectory: true)
     }
@@ -25,6 +30,15 @@ enum NAFPaths {
 
     static var scrollHelperURL: URL {
         helperURL(in: executableDirectory)
+    }
+
+    static func migrateLegacySupportIfNeeded() {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: stateFile.path) { return }
+        let legacy = legacyApplicationSupport.appendingPathComponent("state.json")
+        guard fm.fileExists(atPath: legacy.path) else { return }
+        try? fm.createDirectory(at: applicationSupport, withIntermediateDirectories: true)
+        try? fm.copyItem(at: legacy, to: stateFile)
     }
 
     private static func helperURL(in directory: URL) -> URL {

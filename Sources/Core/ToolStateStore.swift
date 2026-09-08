@@ -47,9 +47,10 @@ final class ToolStateStore {
     private var state: ToolState
 
     private init() {
+        YeobunPaths.migrateLegacySupportIfNeeded()
         state = Self.loadFromDisk()
         Self.ensureDirectory()
-        if !FileManager.default.fileExists(atPath: NAFPaths.stateFile.path) {
+        if !FileManager.default.fileExists(atPath: YeobunPaths.stateFile.path) {
             Self.write(state)
         }
     }
@@ -78,13 +79,13 @@ final class ToolStateStore {
     func notifyChange() {
         let pid = "\(getpid())"
         DistributedNotificationCenter.default().postNotificationName(
-            NAFPaths.stateDidChangeNotification,
+            YeobunPaths.stateDidChangeNotification,
             object: pid,
             userInfo: nil,
             deliverImmediately: true
         )
         DistributedNotificationCenter.default().postNotificationName(
-            NAFPaths.scrollReloadNotification,
+            YeobunPaths.scrollReloadNotification,
             object: pid,
             userInfo: nil,
             deliverImmediately: true
@@ -93,13 +94,13 @@ final class ToolStateStore {
 
     private static func ensureDirectory() {
         try? FileManager.default.createDirectory(
-            at: NAFPaths.applicationSupport,
+            at: YeobunPaths.applicationSupport,
             withIntermediateDirectories: true
         )
     }
 
     private static func loadFromDisk() -> ToolState {
-        if let data = try? Data(contentsOf: NAFPaths.stateFile),
+        if let data = try? Data(contentsOf: YeobunPaths.stateFile),
            let state = try? JSONDecoder().decode(ToolState.self, from: data) {
             return state
         }
@@ -111,7 +112,7 @@ final class ToolStateStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(state) else { return }
-        try? data.write(to: NAFPaths.stateFile, options: .atomic)
+        try? data.write(to: YeobunPaths.stateFile, options: .atomic)
     }
 
     private static func migrateFromUserDefaults() -> ToolState {

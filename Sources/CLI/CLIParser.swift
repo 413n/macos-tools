@@ -5,23 +5,23 @@ enum CLIParser {
     static let awakeMinutes = [5, 10, 15, 30, 60, 120, 300]
 
     static let helpText = """
-    naf-tools — control NAF Tools from the terminal
+    yeobun — control Yeobun from the terminal
 
     Usage:
-      naf-tools status [--json]
-      naf-tools keyboard on [--minutes N] [--dim|--no-dim] [--json]
-      naf-tools keyboard off [--json]
-      naf-tools keyboard status [--json]
-      naf-tools scroll on [--json]
-      naf-tools scroll off [--json]
-      naf-tools scroll status [--json]
-      naf-tools lid on [--json]
-      naf-tools lid off [--json]
-      naf-tools lid status [--json]
-      naf-tools awake on [--minutes N] [--json]
-      naf-tools awake off [--json]
-      naf-tools awake status [--json]
-      naf-tools mac [--json]
+      yeobun status [--json]
+      yeobun keyboard on [--minutes N] [--dim|--no-dim] [--json]
+      yeobun keyboard off [--json]
+      yeobun keyboard status [--json]
+      yeobun scroll on [--json]
+      yeobun scroll off [--json]
+      yeobun scroll status [--json]
+      yeobun lid on [--json]
+      yeobun lid off [--json]
+      yeobun lid status [--json]
+      yeobun awake on [--minutes N] [--json]
+      yeobun awake off [--json]
+      yeobun awake status [--json]
+      yeobun mac [--json]
 
     Keyboard --minutes: \(keyboardMinutes.map(String.init).joined(separator: ", "))
     Awake --minutes: \(awakeMinutes.map(String.init).joined(separator: ", ")) (omit for indefinitely)

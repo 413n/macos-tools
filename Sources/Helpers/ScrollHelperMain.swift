@@ -20,13 +20,13 @@ struct ScrollHelperMain {
         devices.start()
 
         guard ScrollReverseService.shared.start() else {
-            fputs("naf-tools-scroll: Accessibility permission is required.\n", stderr)
+            fputs("yeobun-scroll: Accessibility permission is required.\n", stderr)
             store.update { $0.scrollHelperPID = 0 }
             exit(3)
         }
 
         DistributedNotificationCenter.default().addObserver(
-            forName: NAFPaths.scrollReloadNotification,
+            forName: YeobunPaths.scrollReloadNotification,
             object: nil,
             queue: .main
         ) { _ in

@@ -1,24 +1,28 @@
-# NAF Tools
+# Yeobun
 
 <p align="center">
-  <img src="docs/screenshots/icon.png" width="128" alt="NAF Tools icon">
+  <img src="docs/screenshots/icon.png" width="128" alt="Yeobun icon">
 </p>
+
+<p align="center">N6 Studio</p>
 
 <p align="center">
   <strong>A Control Center–style menu-bar widget for a few Mac utilities you actually reach for, plus a glance at this Mac.</strong><br>
   It lives next to the clock, follows light and dark, and never takes a Dock icon.
 </p>
 
+<p align="center"><em>Yeobun</em> is from Korean <strong>여분</strong>: spare, extra — the controls macOS did not ship.</p>
+
 <p align="center">
-  <img src="docs/screenshots/home-light.png" width="300" alt="NAF Tools home panel in light mode">
-  <img src="docs/screenshots/home-dark.png" width="300" alt="NAF Tools home panel in dark mode">
+  <img src="docs/screenshots/home-light.png" width="300" alt="Yeobun home panel in light mode">
+  <img src="docs/screenshots/home-dark.png" width="300" alt="Yeobun home panel in dark mode">
 </p>
 <p align="center">
-  <img src="docs/screenshots/stats-light.png" width="300" alt="NAF Tools stats tab in light mode">
-  <img src="docs/screenshots/stats-dark.png" width="300" alt="NAF Tools stats tab in dark mode">
+  <img src="docs/screenshots/stats-light.png" width="300" alt="Yeobun stats tab in light mode">
+  <img src="docs/screenshots/stats-dark.png" width="300" alt="Yeobun stats tab in dark mode">
 </p>
 
-Click the **N** in the menu bar to open a 2-column grid. **Tools** and **Stats** are separate tabs; the one you last used is remembered.
+Click the wrench in the menu bar to open a 2-column grid. **Tools** and **Stats** are separate tabs; the one you last used is remembered.
 
 Each Tools tile is one utility:
 
@@ -61,7 +65,7 @@ sudo pmset -b disablesleep 1
 
 Turning the tile Off restores battery sleep to 60 minutes and `disablesleep 0`.
 
-The first toggle asks for an administrator password once. That installs a narrow `/etc/sudoers.d/naf-tools-lid-sleep` rule so later On/Off switches do not prompt. The flag is system-wide for battery power and stays until you turn it off; quitting the app does not restore sleep. A closed MacBook with nowhere to dump heat can get hot — switch it off when you are done.
+The first toggle asks for an administrator password once. That installs a narrow `/etc/sudoers.d/yeobun-lid-sleep` rule so later On/Off switches do not prompt. The flag is system-wide for battery power and stays until you turn it off; quitting the app does not restore sleep. A closed MacBook with nowhere to dump heat can get hot — switch it off when you are done.
 
 ## Awake
 
@@ -76,7 +80,7 @@ caffeinate -di
 caffeinate -di -t 3600   # one hour
 ```
 
-Turn the tile On to hold sleep indefinitely, or pick a duration first (5 minutes through 5 hours). When a timer is running, the tile shows time left. Changing the duration while On restarts the timer. The hold is a detached `caffeinate` process, so quitting the menu-bar app does not drop it. Turn the tile (or `naf-tools awake off`) off when you are done.
+Turn the tile On to hold sleep indefinitely, or pick a duration first (5 minutes through 5 hours). When a timer is running, the tile shows time left. Changing the duration while On restarts the timer. The hold is a detached `caffeinate` process, so quitting the menu-bar app does not drop it. Turn the tile (or `yeobun awake off`) off when you are done.
 
 Lid Sleep is separate: that keeps the Mac awake with the **lid closed** on battery. Awake only blocks idle sleep while the lid is open.
 
@@ -118,7 +122,7 @@ Used and free space on the boot volume, plus other mounted disks.
   <img src="docs/screenshots/settings.png" width="320" alt="Settings: login item, menu bar, status check">
 </p>
 
-- **Open at login** — keep NAF Tools in the menu bar (on by default).
+- **Open at login** — keep Yeobun in the menu bar (on by default).
 - **Menu bar** — logo only, icons for tools that are on, or both. When nothing is on, the logo stays so you can still find the app.
 - **Menu bar stats** — optional CPU, battery, or network glance next to the logo. Off by default; sampling then only runs while the panel is open.
 - **Check status** — read each tool from this Mac and restore anything that dropped (sleep can clear a keyboard mapping; Accessibility can disable the scroll tap).
@@ -127,31 +131,31 @@ Right-click the menu-bar item for the same toggles without opening the panel.
 
 ## Terminal / agents
 
-`./build.sh` also installs a `naf-tools` CLI (symlinked to `~/.local/bin/naf-tools`) that drives the same tools without opening the panel. Add `~/.local/bin` to `PATH` if it is not there already.
+`./build.sh` also installs a `yeobun` CLI (symlinked to `~/.local/bin/yeobun`) that drives the same tools without opening the panel. Add `~/.local/bin` to `PATH` if it is not there already.
 
 ```sh
-naf-tools status --json
-naf-tools keyboard on --minutes 15
-naf-tools scroll on
-naf-tools lid off
-naf-tools awake on --minutes 60
-naf-tools mac
+yeobun status --json
+yeobun keyboard on --minutes 15
+yeobun scroll on
+yeobun lid off
+yeobun awake on --minutes 60
+yeobun mac
 ```
 
-Every command accepts `--json`. Exit codes: `0` ok, `1` failed, `2` usage, `3` permission (Accessibility or administrator). `naf-tools --help` is the full contract.
+Every command accepts `--json`. Exit codes: `0` ok, `1` failed, `2` usage, `3` permission (Accessibility or administrator). `yeobun --help` is the full contract.
 
 ## Persistence
 
 Each tool remembers the last On/Off you chose. Opening the app again restores that choice:
 
 - **Keyboard lock** is re-applied for the rest of this boot. A reboot always unlocks the keys (so you cannot lock yourself out). Auto-unlock, if set, keeps running after Quit.
-- **Scroll reverse** is a helper process (`naf-tools-scroll`) shared by the app and the CLI. It keeps running after Quit until you turn Scroll off.
+- **Scroll reverse** is a helper process (`yeobun-scroll`) shared by the app and the CLI. It keeps running after Quit until you turn Scroll off.
 - **Lid sleep** lives in `pmset`. The tile reads the real setting on launch.
 - **Awake** is a detached `caffeinate` process shared by the app and the CLI. It keeps running after Quit until the timer ends or you turn it off.
 
 ## Install
 
-Download the disk image from the [latest GitHub release](https://github.com/413n/macos-tools/releases/latest), open it, and drag **NAF Tools** onto **Applications**. Then open the app from Applications (or Spotlight). Look for the N logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
+Download the disk image from the [latest GitHub release](https://github.com/413n/macos-tools/releases/latest), open it, and drag **Yeobun** onto **Applications**. Then open the app from Applications (or Spotlight). Look for the wrench logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
 
 If Gatekeeper blocks it, right-click the app → Open. The release is signed locally, not notarized.
 
@@ -159,10 +163,10 @@ From source:
 
 ```sh
 ./build.sh
-open ~/Applications/NAF\ Tools.app
+open ~/Applications/Yeobun.app
 ```
 
-That also installs the CLI at `~/.local/bin/naf-tools`. After a disk-image install, the same binary lives at `/Applications/NAF Tools.app/Contents/MacOS/naf-tools`. Add `~/.local/bin` to `PATH` if needed.
+That also installs the CLI at `~/.local/bin/yeobun`. After a disk-image install, the same binary lives at `/Applications/Yeobun.app/Contents/MacOS/yeobun-cli`. Add `~/.local/bin` to `PATH` if needed.
 
 macOS 14 or later.
 

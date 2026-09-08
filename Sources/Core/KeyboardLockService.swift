@@ -21,7 +21,7 @@ final class KeyboardLockService {
     var onTimerExpired: (() -> Void)?
 
     private let cacheDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Caches/naf-tools")
+        .appendingPathComponent("Library/Caches/yeobun")
     private var timerPIDFile: URL { cacheDir.appendingPathComponent("keyboard-timer.pid") }
     private var timerMetaFile: URL { cacheDir.appendingPathComponent("keyboard-timer.json") }
     private var cachedIDs: KeyboardIDs?

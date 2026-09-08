@@ -1,8 +1,8 @@
-# NAF Tools
+# Yeobun
 
-macOS menu-bar app. SwiftUI inside an AppKit `NSStatusItem` + `NSPopover`. No Dock icon (`LSUIElement`).
+macOS menu-bar app by N6 Studio. SwiftUI inside an AppKit `NSStatusItem` + `NSPopover`. No Dock icon (`LSUIElement`).
 
-Agents should drive tools with the `naf-tools` CLI (`naf-tools --help`, `--json`), not by clicking the popover. GUI rules below apply only to the panel.
+Agents should drive tools with the `yeobun` CLI (`yeobun --help`, `--json`), not by clicking the popover. GUI rules below apply only to the panel.
 
 ## UI style — Control Center modules
 

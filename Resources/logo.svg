@@ -1,4 +1,16 @@
-<svg width="500" height="500" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-	<path d="M0 0V500H100.607V263.5L258 500L392 500L59.29 0H0Z" fill="white"/>
-	<path d="M500 500V0H399.393V236.5L242 0H108L440.71 500H500Z" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <mask id="handle-hole" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="white"/>
+      <circle cx="12" cy="18.75" r="1.15" fill="black"/>
+    </mask>
+  </defs>
+  <path
+    d="M3 2.75h4l2.85 5.15h4.3L17 2.75h4l-1.75 6.1L15 11.7v7.05C15 20.68 13.66 22 12 22s-3-1.32-3-3.25V11.7L4.75 8.85 3 2.75Z"
+    fill="currentColor"
+    stroke="currentColor"
+    stroke-width=".65"
+    stroke-linejoin="round"
+    mask="url(#handle-hole)"
+  />
 </svg>

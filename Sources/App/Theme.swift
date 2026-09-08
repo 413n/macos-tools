@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+enum Brand {
+    static let product = "Yeobun"
+    static let studio = "N6 Studio"
+}
+
 final class PanelPresentation: ObservableObject {
     @Published var generation = 0
     @Published var route: PanelRoute = .home
@@ -43,7 +48,7 @@ enum PanelRoute: Equatable {
 
     var title: String {
         switch self {
-        case .home: "NAF Tools"
+        case .home: Brand.product
         case .keyboard: "Keyboard"
         case .scroll: "Scroll"
         case .lid: "Lid Sleep"
