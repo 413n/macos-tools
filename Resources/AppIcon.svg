@@ -30,13 +30,13 @@
       <rect width="1024" height="1024" fill="white"/>
       <circle cx="512" cy="800" r="45" fill="black"/>
     </mask>
-    <filter id="mark-shadow" x="56" y="62" width="912" height="928" filterUnits="userSpaceOnUse">
+    <filter id="mark-shadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse">
       <feDropShadow dx="0" dy="30" stdDeviation="30" flood-color="#000" flood-opacity=".62"/>
     </filter>
     <path id="wrench" d="M128 140h170l122 220h184l122-220h170l-76 280-180 120v290c0 46-37.3 72-128 72s-128-26-128-72V540L204 420l-76-280Z"/>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#background)"/>
-  <rect x="64" y="64" width="896" height="896" rx="205" fill="url(#lacquer-sheen)"/>
+  <rect width="1024" height="1024" rx="234" fill="url(#background)"/>
+  <rect width="1024" height="1024" rx="234" fill="url(#lacquer-sheen)"/>
   <g transform="translate(512 520) scale(.82) translate(-512 -512)" filter="url(#mark-shadow)" mask="url(#handle-hole)">
     <use href="#wrench" fill="url(#pearl)" stroke="#E9F0EE" stroke-opacity=".42" stroke-width="18" stroke-linejoin="round"/>
     <path d="M384 425h256v405c0 46-37.3 72-128 72s-128-26-128-72V425Z" fill="url(#pearl-handle)"/>

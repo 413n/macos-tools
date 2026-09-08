@@ -183,7 +183,7 @@ enum Radius {
     static let tilePadding: CGFloat = 12
     static let group: CGFloat = 16
     static let groupPadding: CGFloat = 14
-    static let panelPadding: CGFloat = 14
+    static let panelPadding: CGFloat = 18
     static let grid: CGFloat = 10
     static let chrome: CGFloat = 28
     static let glyph: CGFloat = 30

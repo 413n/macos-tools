@@ -112,7 +112,12 @@ func drawGradient(
     ctx.saveGState()
     ctx.addPath(path)
     ctx.clip()
-    ctx.drawLinearGradient(gradient, start: start, end: end, options: [])
+    ctx.drawLinearGradient(
+        gradient,
+        start: start,
+        end: end,
+        options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+    )
     ctx.restoreGState()
 }
 
@@ -139,7 +144,7 @@ func drawRadialGradient(
         startRadius: startRadius,
         endCenter: endCenter,
         endRadius: endRadius,
-        options: []
+        options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
     )
     ctx.restoreGState()
 }
@@ -150,9 +155,9 @@ func drawAppIcon(_ ctx: CGContext, pixels: CGFloat) {
     ctx.scaleBy(x: pixels / AppWrenchMark.canvas, y: -pixels / AppWrenchMark.canvas)
 
     let plate = CGPath(
-        roundedRect: CGRect(x: 64, y: 64, width: 896, height: 896),
-        cornerWidth: 205,
-        cornerHeight: 205,
+        roundedRect: CGRect(x: 0, y: 0, width: 1024, height: 1024),
+        cornerWidth: 234,
+        cornerHeight: 234,
         transform: nil
     )
     drawGradient(
