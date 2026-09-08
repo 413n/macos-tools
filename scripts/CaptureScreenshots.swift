@@ -70,6 +70,12 @@ private func captureAll(to out: URL) throws {
         model.scrollReverseByDevice = ["1133:16514": true]
         model.accessibilityTrusted = true
     }
+    try write(name: "lid.png", appearance: .darkAqua, to: out) { model, presentation in
+        presentation.route = .lid
+        seedHome(model)
+        model.lidSleepDisabled = true
+        model.lidStatus = "Battery stays awake with the lid closed"
+    }
     try write(name: "awake.png", appearance: .darkAqua, to: out) { model, presentation in
         presentation.route = .awake
         seedHome(model)

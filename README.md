@@ -7,114 +7,106 @@
 <p align="center">N6 Studio</p>
 
 <p align="center">
-  <strong>A Control Center–style menu-bar widget for a few Mac utilities you actually reach for, plus a glance at this Mac.</strong><br>
-  It lives next to the clock, follows light and dark, and never takes a Dock icon.
+  <strong>A Control Center–style panel in the menu bar for the extras macOS did not ship. No Dock icon.</strong><br>
+  Lock the built-in keyboard. Reverse mouse scroll. Stay awake with the lid closed. Prevent idle sleep. Glance at this Mac.
 </p>
 
-<p align="center"><em>Yeobun</em> is from Korean <strong>여분</strong>: spare, extra — the controls macOS did not ship.</p>
+<p align="center"><em>Yeobun</em> is from Korean <strong>여분</strong>: spare, extra.</p>
 
 <p align="center">
-  <img src="docs/screenshots/home-light.png" width="300" alt="Yeobun home panel in light mode">
-  <img src="docs/screenshots/home-dark.png" width="300" alt="Yeobun home panel in dark mode">
+  <img src="docs/screenshots/home-light.png" width="300" alt="Yeobun Tools tab in light mode">
+  <img src="docs/screenshots/home-dark.png" width="300" alt="Yeobun Tools tab in dark mode">
 </p>
 <p align="center">
-  <img src="docs/screenshots/stats-light.png" width="300" alt="Yeobun stats tab in light mode">
-  <img src="docs/screenshots/stats-dark.png" width="300" alt="Yeobun stats tab in dark mode">
+  <img src="docs/screenshots/stats-light.png" width="300" alt="Yeobun Stats tab in light mode">
+  <img src="docs/screenshots/stats-dark.png" width="300" alt="Yeobun Stats tab in dark mode">
 </p>
 
-Click the wrench in the menu bar to open a 2-column grid. **Tools** and **Stats** are separate tabs; the one you last used is remembered.
+Click the wrench to open a two-column grid. **Tools** and **Stats** are tabs; the last one you used is remembered. Click a tile’s **icon** to toggle it. Click the rest of the tile for options. The **gear** opens Settings.
 
-Each Tools tile is one utility:
+## Install
 
-- Tap the **icon** to toggle it with the current options.
-- Tap the **rest of the tile** for the detail screen.
-- The **gear** opens Settings. Closing the popover always returns you home.
+Homebrew:
 
-Active tiles fill with their color (orange keyboard, brown awake, and so on). Off tiles stay quiet. **This Mac**, **Battery**, **Network**, and **Storage** live on the Stats tab and are informational only. This Mac shows live CPU and RAM; the others show charge, throughput, and free space while the panel is open.
+```sh
+brew install --cask n6-studio/tap/yeobun
+```
 
-## Keyboard lock
+Or tap first, then install:
+
+```sh
+brew tap n6-studio/tap
+brew trust --tap n6-studio/tap
+brew install --cask yeobun
+```
+
+Homebrew 6 asks you to trust `n6-studio/tap` the first time. The one-line install trusts only this cask.
+
+Or download the disk image from the [latest GitHub release](https://github.com/n6-studio/yeobun/releases/latest) and drag **Yeobun** onto **Applications**. Open it, then look for the wrench in the menu bar. Drag the icon left if macOS tucks it behind the extra-items chevron.
+
+If Gatekeeper blocks it, right-click the app → Open. The release is signed locally, not notarized.
+
+Requires macOS 14 or later.
+
+## Tools
+
+Active tiles fill with their color.
+
+### Keyboard
 
 <p align="center">
   <img src="docs/screenshots/keyboard.png" width="320" alt="Keyboard lock detail">
 </p>
 
-Disables the MacBook’s **built-in keyboard** while the trackpad, any external keyboard, Touch ID, and the power button keep working.
+Disables the MacBook’s **built-in keyboard**. The trackpad, any external keyboard, Touch ID, and the power button keep working. A reboot always unlocks the keys.
 
-Every HID keyboard usage on the internal keyboard is remapped to “no event” for the current boot (`hidutil` UserKeyMapping). A reboot or logout always restores the keys, so you cannot lock yourself out.
+Optional **auto-unlock** after 5–60 minutes is for wiping the keyboard down. **Lights off** dims the backlight while it is locked.
 
-Optional **auto-unlock** after 5–60 minutes is a dead-man’s switch for wiping the keyboard down. **Lights off** dims the keyboard backlight while it is locked. Sleep/wake can drop the mapping; the app re-applies it if the lock was still on.
-
-## Scroll reverse
+### Scroll
 
 <p align="center">
   <img src="docs/screenshots/scroll.png" width="320" alt="Scroll reverse detail">
 </p>
 
-macOS has one system-wide Natural Scrolling switch. When this tool is on, **mouse wheel** (and Magic Mouse) scrolling is reversed so a mouse feels classic while the **trackpad stays natural**.
+Reverses **mouse wheel** scrolling so a mouse feels classic while the **trackpad stays natural**. Each mouse can be switched on its own. Needs Accessibility permission; the panel will ask if it is missing.
 
-Each connected mouse can be switched independently. Requires **Accessibility** permission (System Settings → Privacy & Security → Accessibility). The panel will prompt if it is missing.
+### Lid Sleep
 
-## Lid sleep
+<p align="center">
+  <img src="docs/screenshots/lid.png" width="320" alt="Lid Sleep detail">
+</p>
 
-Keeps the Mac awake on **battery** when the lid is closed — the same `pmset` calls as:
+Keeps the Mac awake on **battery** when the lid is closed. The first toggle asks for an administrator password once; later switches do not. The setting stays until you turn it off — quitting the app does not restore sleep.
 
-```sh
-sudo pmset -b sleep 0
-sudo pmset -b disablesleep 1
-```
+A closed MacBook with nowhere to dump heat can get hot. Switch it off when you are done.
 
-Turning the tile Off restores battery sleep to 60 minutes and `disablesleep 0`.
-
-The first toggle asks for an administrator password once. That installs a narrow `/etc/sudoers.d/yeobun-lid-sleep` rule so later On/Off switches do not prompt. The flag is system-wide for battery power and stays until you turn it off; quitting the app does not restore sleep. A closed MacBook with nowhere to dump heat can get hot — switch it off when you are done.
-
-## Awake
+### Awake
 
 <p align="center">
   <img src="docs/screenshots/awake.png" width="320" alt="Awake detail with remaining time">
 </p>
 
-Prevents idle sleep and display sleep — the same job as KeepingYouAwake, using macOS’s built-in `caffeinate`:
+Prevents idle sleep and display sleep. Turn it on indefinitely, or pick a duration first (5 minutes through 5 hours). The tile shows time left. Quitting the app does not drop the hold.
 
-```sh
-caffeinate -di
-caffeinate -di -t 3600   # one hour
-```
+Lid Sleep is the closed-lid case. Awake only blocks idle sleep while the lid is open.
 
-Turn the tile On to hold sleep indefinitely, or pick a duration first (5 minutes through 5 hours). When a timer is running, the tile shows time left. Changing the duration while On restarts the timer. The hold is a detached `caffeinate` process, so quitting the menu-bar app does not drop it. Turn the tile (or `yeobun awake off`) off when you are done.
+## Stats
 
-Lid Sleep is separate: that keeps the Mac awake with the **lid closed** on battery. Awake only blocks idle sleep while the lid is open.
-
-## This Mac
+Informational only. Sampled while the panel is open, and in the menu bar if you turn on a glance.
 
 <p align="center">
-  <img src="docs/screenshots/this-mac.png" width="320" alt="This Mac CPU and memory meters">
-</p>
-
-Live CPU and memory, plus pressure, swap, thermal state, uptime, a short CPU sparkline, and the top three processes. Sampled while the popover is open (and in the menu bar if you turn on a glance). The home tile shows CPU and RAM.
-
-## Battery
-
-<p align="center">
+  <img src="docs/screenshots/this-mac.png" width="320" alt="This Mac CPU and memory">
   <img src="docs/screenshots/battery.png" width="320" alt="Battery charge, health, and accessories">
 </p>
-
-Charge, time remaining, health, and cycle count on MacBooks. Bluetooth accessories (mouse, trackpad, AirPods) show when macOS reports a percentage. On a desktop the tile reads “Desktop”.
-
-## Network
-
 <p align="center">
   <img src="docs/screenshots/network.png" width="320" alt="Network link, IP, and throughput">
-</p>
-
-Link type, Wi‑Fi name when macOS allows it, local IP, and live down/up rates.
-
-## Storage
-
-<p align="center">
   <img src="docs/screenshots/storage.png" width="320" alt="Boot disk used and free space">
 </p>
 
-Used and free space on the boot volume, plus other mounted disks.
+- **This Mac** — live CPU and RAM on the tile; detail adds pressure, swap, thermal state, uptime, and the top processes.
+- **Battery** — charge, time remaining, health, and cycle count. Bluetooth accessories when macOS reports a percentage. On a desktop the tile reads “Desktop”.
+- **Network** — link type, Wi-Fi name when macOS allows it, local IP, live down/up.
+- **Storage** — used and free space on the boot volume, plus other mounted disks.
 
 ## Settings
 
@@ -123,15 +115,15 @@ Used and free space on the boot volume, plus other mounted disks.
 </p>
 
 - **Open at login** — keep Yeobun in the menu bar (on by default).
-- **Menu bar** — logo only, icons for tools that are on, or both. When nothing is on, the logo stays so you can still find the app.
-- **Menu bar stats** — optional CPU, battery, or network glance next to the logo. Off by default; sampling then only runs while the panel is open.
-- **Check status** — read each tool from this Mac and restore anything that dropped (sleep can clear a keyboard mapping; Accessibility can disable the scroll tap).
+- **Menu bar** — logo only, icons for tools that are on, or both. The logo stays when nothing is on, so you can still find the app.
+- **Menu bar stats** — optional CPU, battery, or network next to the logo.
+- **Check status** — re-read each tool from this Mac and restore anything that dropped.
 
 Right-click the menu-bar item for the same toggles without opening the panel.
 
-## Terminal / agents
+## CLI
 
-`./build.sh` also installs a `yeobun` CLI (symlinked to `~/.local/bin/yeobun`) that drives the same tools without opening the panel. Add `~/.local/bin` to `PATH` if it is not there already.
+`./build.sh` also installs `yeobun` at `~/.local/bin/yeobun`. After a disk-image install, the same binary lives at `/Applications/Yeobun.app/Contents/MacOS/yeobun-cli`. Add `~/.local/bin` to `PATH` if it is not there already.
 
 ```sh
 yeobun status --json
@@ -142,46 +134,18 @@ yeobun awake on --minutes 60
 yeobun mac
 ```
 
-Every command accepts `--json`. Exit codes: `0` ok, `1` failed, `2` usage, `3` permission (Accessibility or administrator). `yeobun --help` is the full contract.
+Every command accepts `--json`. Exit codes: `0` ok, `1` failed, `2` usage, `3` permission. `yeobun --help` is the full contract.
 
-## Persistence
-
-Each tool remembers the last On/Off you chose. Opening the app again restores that choice:
-
-- **Keyboard lock** is re-applied for the rest of this boot. A reboot always unlocks the keys (so you cannot lock yourself out). Auto-unlock, if set, keeps running after Quit.
-- **Scroll reverse** is a helper process (`yeobun-scroll`) shared by the app and the CLI. It keeps running after Quit until you turn Scroll off.
-- **Lid sleep** lives in `pmset`. The tile reads the real setting on launch.
-- **Awake** is a detached `caffeinate` process shared by the app and the CLI. It keeps running after Quit until the timer ends or you turn it off.
-
-## Install
-
-Homebrew:
-
-```sh
-brew install --cask n6-studio/tap/yeobun
-```
-
-Homebrew 6 asks you to trust the `n6-studio/tap` tap the first time (`brew trust --tap n6-studio/tap`).
-
-Or download the disk image from the [latest GitHub release](https://github.com/n6-studio/yeobun/releases/latest), open it, and drag **Yeobun** onto **Applications**. Then open the app from Applications (or Spotlight). Look for the wrench logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
-
-If Gatekeeper blocks it, right-click the app → Open. The release is signed locally, not notarized.
-
-From source:
+## From source
 
 ```sh
 ./build.sh
 open ~/Applications/Yeobun.app
 ```
 
-That also installs the CLI at `~/.local/bin/yeobun`. After a disk-image install, the same binary lives at `/Applications/Yeobun.app/Contents/MacOS/yeobun-cli`. Add `~/.local/bin` to `PATH` if needed.
-
-macOS 14 or later.
-
 ## Notes
 
-- Keyboard lock needs no extra permission.
-- Awake needs no extra permission (`caffeinate`).
-- Scroll reverse needs Accessibility because it installs a session event tap.
-- Lid sleep asks for an administrator password once, then toggles without prompting.
-- Open at login can be turned off from Settings.
+- Keyboard lock and Awake need no extra permission.
+- Scroll reverse needs Accessibility.
+- Lid Sleep asks for an administrator password once.
+- Keyboard lock lasts until you unlock or reboot. Sleep can drop the mapping; the app re-applies it if the lock was still on. Scroll reverse and Awake keep running after Quit until you turn them off. Lid Sleep stays until you turn it off.
