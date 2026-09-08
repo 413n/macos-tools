@@ -1,0 +1,77 @@
+name: Update Homebrew tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (empty uses the latest).
+        required: false
+        type: string
+
+jobs:
+  tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          if [[ -n "${TAG_INPUT:-}" ]]; then
+            tag="$TAG_INPUT"
+          elif [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $tag is not a vX.Y.Z release" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download disk image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mkdir -p artifacts
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "Yeobun-${VERSION}.dmg" \
+            --dir artifacts
+
+      - name: Update n6-studio/homebrew-tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "Missing HOMEBREW_TAP_TOKEN secret (repo PAT with write access to n6-studio/homebrew-tap)" >&2
+            exit 1
+          fi
+          sha256="$(sha256sum "artifacts/Yeobun-${VERSION}.dmg" | awk '{print $1}')"
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/n6-studio/homebrew-tap.git" tap
+          VERSION="$VERSION" SHA256="$sha256" perl -i -pe '
+            s/^(\s*version\s+")[^"]+"/${1}$ENV{VERSION}"/;
+            s/^(\s*sha256\s+")[0-9a-f]+"/${1}$ENV{SHA256}"/;
+          ' tap/Casks/yeobun.rb
+          grep -q "version \"$VERSION\"" tap/Casks/yeobun.rb
+          grep -q "sha256 \"$sha256\"" tap/Casks/yeobun.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/yeobun.rb
+          if git diff --cached --quiet; then
+            echo "Tap already at Yeobun ${VERSION}"
+            exit 0
+          fi
+          git commit -m "yeobun ${VERSION}"
+          git push
+          echo "Updated n6-studio/homebrew-tap to Yeobun ${VERSION} (${sha256})"
