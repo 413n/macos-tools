@@ -12,6 +12,10 @@ enum CaptureScreenshots {
             exit(1)
         }
         let out = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+        if let icon = NSImage(contentsOf: out.appendingPathComponent("icon.png")) {
+            icon.setName("AppIcon")
+            NSApp.applicationIconImage = icon
+        }
 
         DispatchQueue.main.async {
             do {

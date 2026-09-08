@@ -23,9 +23,9 @@ enum UpdateCheckError: LocalizedError {
 }
 
 enum UpdateCheckService {
-    static let githubRepo = "413n/macos-tools"
-    static let latestReleaseURL = URL(string: "https://api.github.com/repos/413n/macos-tools/releases/latest")!
-    static let releasesPageURL = URL(string: "https://github.com/413n/macos-tools/releases")!
+    static let githubRepo = "n6-studio/yeobun"
+    static let latestReleaseURL = URL(string: "https://api.github.com/repos/n6-studio/yeobun/releases/latest")!
+    static let releasesPageURL = URL(string: "https://github.com/n6-studio/yeobun/releases")!
 
     static var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"

@@ -4,6 +4,7 @@ import SwiftUI
 enum Brand {
     static let product = "Yeobun"
     static let studio = "N6 Studio"
+    static let studioURL = URL(string: "https://n6.studio/")!
 }
 
 final class PanelPresentation: ObservableObject {

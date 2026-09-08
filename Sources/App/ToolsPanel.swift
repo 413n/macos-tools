@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ToolsPanel: View {
@@ -34,26 +35,15 @@ struct ToolsPanel: View {
             }
 
             if presentation.route == .home, !presentation.isEditingHome {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(Brand.studio)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text(Brand.product)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
-                }
-                .lineLimit(1)
+                Text(Brand.product)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             } else {
                 Text(presentation.isEditingHome ? "Edit" : presentation.route.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-            }
-
-            if presentation.route == .home, !presentation.isEditingHome {
-                Text(model.appVersion)
-                    .font(.system(size: 11, weight: .regular).monospacedDigit())
-                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 8)
@@ -1308,7 +1298,7 @@ private struct SettingsDetail: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Version")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("\(Brand.studio) · \(model.appVersion)")
+                        Text(model.appVersion)
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -1342,6 +1332,30 @@ private struct SettingsDetail: View {
                 }
             }
 
+            GroupedPanel {
+                HStack(spacing: 4) {
+                    Spacer(minLength: 0)
+                    Text("Created by")
+                    Button {
+                        NSWorkspace.shared.open(Brand.studioURL)
+                    } label: {
+                        Text(Brand.studio)
+                            .underline()
+                    }
+                    .buttonStyle(PressScaleButtonStyle())
+                    .accessibilityHint("Opens n6.studio")
+                    Text("with")
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.pink)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            }
+            .stagger(index: 5, generation: presentation.generation)
+
             Button("Quit Yeobun") {
                 model.quit()
             }
@@ -1349,7 +1363,7 @@ private struct SettingsDetail: View {
             .foregroundStyle(.red)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
-            .stagger(index: 5, generation: presentation.generation)
+            .stagger(index: 6, generation: presentation.generation)
         }
     }
 }
@@ -1372,13 +1386,24 @@ private struct GroupedPanel<Content: View>: View {
 
 private struct LogoMark: View {
     var body: some View {
-        YeobunN()
-            .fill(.primary)
-            .frame(width: 14, height: 14)
+        Image(nsImage: Self.icon)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
             .frame(width: Radius.chrome, height: Radius.chrome)
-            .background(ModuleColor.offFill, in: Circle())
             .accessibilityHidden(true)
     }
+
+    private static let icon: NSImage = {
+        if let named = NSImage(named: "AppIcon"), named.size != .zero {
+            return named
+        }
+        let fromApp = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        if fromApp.size != .zero {
+            return fromApp
+        }
+        return NSApp.applicationIconImage
+    }()
 }
 
 private struct MeterRow: View {
