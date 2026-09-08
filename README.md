@@ -161,6 +161,8 @@ Homebrew:
 brew install --cask n6-studio/tap/yeobun
 ```
 
+Homebrew 6 asks you to trust the `n6-studio/tap` tap the first time (`brew trust --tap n6-studio/tap`).
+
 Or download the disk image from the [latest GitHub release](https://github.com/n6-studio/yeobun/releases/latest), open it, and drag **Yeobun** onto **Applications**. Then open the app from Applications (or Spotlight). Look for the wrench logo in the menu bar. Drag the icon leftward if macOS tucks it behind the extra-items chevron.
 
 If Gatekeeper blocks it, right-click the app → Open. The release is signed locally, not notarized.
